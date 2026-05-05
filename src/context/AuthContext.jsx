@@ -7,7 +7,8 @@ import {
   onAuthStateChanged,
   updateProfile,
   GoogleAuthProvider,
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
 } from "firebase/auth";
 import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
 
@@ -19,7 +20,6 @@ export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Email Signup
   const signup = async (email, password, name, phone) => {
     const userCredential = await createUserWithEmailAndPassword(
       auth,
@@ -42,34 +42,13 @@ export const AuthProvider = ({ children }) => {
     return userCredential;
   };
 
-  // Email Login
   const login = (email, password) => {
     return signInWithEmailAndPassword(auth, email, password);
   };
 
-  // NEW: Google Login
-  const googleSignIn = async () => {
+  const googleSignIn = () => {
     const provider = new GoogleAuthProvider();
-    const result = await signInWithPopup(auth, provider);
-    const user = result.user;
-
-    // Check if this is their first time logging in with Google
-    const userDocRef = doc(db, "users", user.uid);
-    const userDocSnap = await getDoc(userDocRef);
-
-    if (!userDocSnap.exists()) {
-      // If no profile exists, create one using their Google info!
-      await setDoc(userDocRef, {
-        uid: user.uid,
-        fullName: user.displayName || "Valued Guest",
-        email: user.email,
-        phone: user.phoneNumber || "Not Provided",
-        memberSince: serverTimestamp(),
-        tier: "Silver",
-      });
-    }
-
-    return result;
+    return signInWithRedirect(auth, provider);
   };
 
   const logout = () => {
@@ -77,10 +56,37 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
+    const handleRedirectResult = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result && result.user) {
+          const user = result.user;
+          const userDocRef = doc(db, "users", user.uid);
+          const userDocSnap = await getDoc(userDocRef);
+
+          if (!userDocSnap.exists()) {
+            await setDoc(userDocRef, {
+              uid: user.uid,
+              fullName: user.displayName || "Valued Guest",
+              email: user.email,
+              phone: user.phoneNumber || "Not Provided",
+              memberSince: serverTimestamp(),
+              tier: "Silver",
+            });
+          }
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    };
+
+    handleRedirectResult();
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       setLoading(false);
     });
+
     return unsubscribe;
   }, []);
 

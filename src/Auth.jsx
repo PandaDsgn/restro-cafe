@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
@@ -14,8 +14,14 @@ const Auth = () => {
 
   const [loading, setLoading] = useState(false);
 
-  const { login, signup, googleSignIn } = useAuth();
+  const { login, signup, googleSignIn, currentUser } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (currentUser) {
+      navigate("/dashboard");
+    }
+  }, [currentUser, navigate]);
 
   const handleEmailSubmit = async (e) => {
     e.preventDefault();
@@ -32,7 +38,7 @@ const Auth = () => {
         navigate("/dashboard");
       }
     } catch (error) {
-      console.error("Auth Error:", error);
+      console.error(error);
       const message = error.message
         .replace("Firebase: ", "")
         .replace(/\(auth.*\)\.?/, "");
@@ -42,16 +48,13 @@ const Auth = () => {
     }
   };
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignIn = () => {
     setLoading(true);
     try {
-      await googleSignIn();
-      toast.success("Access Granted. Welcome.");
-      navigate("/dashboard");
+      googleSignIn();
     } catch (error) {
-      console.error("Google Auth Error:", error);
+      console.error(error);
       toast.error("Google verification failed. Please try again.");
-    } finally {
       setLoading(false);
     }
   };
@@ -150,7 +153,6 @@ const Auth = () => {
           </button>
         </form>
 
-        {/* GOOGLE DIVIDER & BUTTON */}
         <div className="mt-8 flex items-center justify-between">
           <span className="border-b border-stone-200 w-1/4"></span>
           <span className="text-[10px] text-stone-400 uppercase tracking-widest">
