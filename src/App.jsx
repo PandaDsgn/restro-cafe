@@ -164,15 +164,201 @@ const SmallGoldDivider = () => (
 );
 
 const Reservation = () => {
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
-  const [guests, setGuests] = useState("2");
+  const [selectedDay, setSelectedDay] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState(""); // 0-indexed string (e.g., "0" for Jan)
+  const [selectedYear, setSelectedYear] = useState("");
+  const [selectedHour, setSelectedHour] = useState("");
+  const [selectedMinute, setSelectedMinute] = useState("");
+  const [selectedAmPm, setSelectedAmPm] = useState("");
+  const [guests, setGuests] = useState(2);
   const [isBooking, setIsBooking] = useState(false);
+
+  // Custom Dropdown Open States
+  const [dayDropdownOpen, setDayDropdownOpen] = useState(false);
+  const [monthDropdownOpen, setMonthDropdownOpen] = useState(false);
+  const [yearDropdownOpen, setYearDropdownOpen] = useState(false);
+  const [hourDropdownOpen, setHourDropdownOpen] = useState(false);
+  const [minuteDropdownOpen, setMinuteDropdownOpen] = useState(false);
+  const [amPmDropdownOpen, setAmPmDropdownOpen] = useState(false);
 
   const { currentUser } = useAuth();
   const navigate = useNavigate();
 
-  const handleReservation = async (e) => {
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth();
+  const currentDate = today.getDate();
+
+  const years = [currentYear, currentYear + 1];
+
+  const months = [
+    { value: 0, label: "January" },
+    { value: 1, label: "February" },
+    { value: 2, label: "March" },
+    { value: 3, label: "April" },
+    { value: 4, label: "May" },
+    { value: 5, label: "June" },
+    { value: 6, label: "July" },
+    { value: 7, label: "August" },
+    { value: 8, label: "September" },
+    { value: 9, label: "October" },
+    { value: 10, label: "November" },
+    { value: 11, label: "December" },
+  ];
+
+  // Auto-close open panels when clicking elsewhere on the window
+  useEffect(() => {
+    const closeAllMenus = () => {
+      setDayDropdownOpen(false);
+      setMonthDropdownOpen(false);
+      setYearDropdownOpen(false);
+      setHourDropdownOpen(false);
+      setMinuteDropdownOpen(false);
+      setAmPmDropdownOpen(false);
+    };
+    document.addEventListener("click", closeAllMenus);
+    return () => document.removeEventListener("click", closeAllMenus);
+  }, []);
+
+  const getDaysInMonth = (month, year) => {
+    return new Date(year, month + 1, 0).getDate();
+  };
+
+  const getAvailableDays = () => {
+    if (selectedMonth === "" || !selectedYear) return [];
+
+    const numMonth = parseInt(selectedMonth);
+    const numYear = parseInt(selectedYear);
+    const totalDays = getDaysInMonth(numMonth, numYear);
+    const dayArray = [];
+
+    for (let d = 1; d <= totalDays; d++) {
+      if (
+        numYear === currentYear &&
+        numMonth === currentMonth &&
+        d < currentDate
+      ) {
+        continue;
+      }
+      dayArray.push(d);
+    }
+    return dayArray;
+  };
+
+  const getAvailableMonths = () => {
+    if (!selectedYear) return [];
+    const numYear = parseInt(selectedYear);
+
+    if (numYear === currentYear) {
+      return months.filter((m) => m.value >= currentMonth);
+    }
+    return months;
+  };
+
+  // Safe generation of padded values
+  const hours = Array.from({ length: 12 }, (_, i) => String(i + 1));
+  const minutes = Array.from({ length: 60 }, (_, i) =>
+    String(i).padStart(2, "0"),
+  );
+  const amPmOptions = ["AM", "PM"];
+
+  const getConstructedDate = () => {
+    if (selectedDay === "" || selectedMonth === "" || !selectedYear)
+      return null;
+    const constructed = new Date(
+      parseInt(selectedYear),
+      parseInt(selectedMonth),
+      parseInt(selectedDay),
+    );
+    constructed.setHours(0, 0, 0, 0);
+    return constructed;
+  };
+
+  const isTimeSlotDisabled = (hour, minute, amPm, date) => {
+    if (!date || !hour || !minute || !amPm) return false;
+
+    let numHour = parseInt(hour);
+    const mins = parseInt(minute);
+
+    // Strict block of 1 AM to 6 AM
+    if (amPm === "AM" && numHour >= 1 && numHour <= 6) {
+      return true;
+    }
+
+    if (amPm === "PM" && numHour !== 12) numHour += 12;
+    if (amPm === "AM" && numHour === 12) numHour = 0;
+
+    const targetDateTime = new Date(date);
+    targetDateTime.setHours(numHour, mins, 0, 0);
+
+    const now = new Date();
+    const minAdvanceWindowMs = 12 * 60 * 60 * 1000;
+
+    return targetDateTime.getTime() - now.getTime() < minAdvanceWindowMs;
+  };
+
+  // Declarative selection validator to prevent aggressive resetting
+  useEffect(() => {
+    const numYear = selectedYear ? parseInt(selectedYear) : null;
+    const numMonth = selectedMonth !== "" ? parseInt(selectedMonth) : null;
+    const numDay = selectedDay !== "" ? parseInt(selectedDay) : null;
+
+    // 1. Prune selected month if it becomes a past month (e.g. changing from next year to current year)
+    if (numYear !== null && numMonth !== null) {
+      if (numYear === currentYear && numMonth < currentMonth) {
+        setSelectedMonth("");
+        setSelectedDay("");
+        setSelectedHour("");
+        setSelectedMinute("");
+        setSelectedAmPm("");
+        return;
+      }
+    }
+
+    // 2. Prune selected day if it exceeds the maximum days in a newly selected month/year, or is in the past
+    if (numYear !== null && numMonth !== null && numDay !== null) {
+      const maxDays = getDaysInMonth(numMonth, numYear);
+      const isPastDay =
+        numYear === currentYear &&
+        numMonth === currentMonth &&
+        numDay < currentDate;
+
+      if (numDay > maxDays || isPastDay) {
+        setSelectedDay("");
+        setSelectedHour("");
+        setSelectedMinute("");
+        setSelectedAmPm("");
+        return;
+      }
+    }
+
+    // 3. Prune selected time values if they now violate the 12-hour warning window under the newly updated date configuration
+    if (selectedHour && selectedMinute && selectedAmPm) {
+      const constructedDate = getConstructedDate();
+      if (constructedDate) {
+        const disabled = isTimeSlotDisabled(
+          selectedHour,
+          selectedMinute,
+          selectedAmPm,
+          constructedDate,
+        );
+        if (disabled) {
+          setSelectedHour("");
+          setSelectedMinute("");
+          setSelectedAmPm("");
+        }
+      }
+    }
+  }, [
+    selectedYear,
+    selectedMonth,
+    selectedDay,
+    selectedHour,
+    selectedMinute,
+    selectedAmPm,
+  ]);
+
+  const handleReservationSubmit = async (e) => {
     e.preventDefault();
 
     if (!currentUser) {
@@ -181,10 +367,29 @@ const Reservation = () => {
       return;
     }
 
-    if (!date || !time) {
-      toast.error("Please select a date and time.");
+    const targetDate = getConstructedDate();
+    if (!targetDate || !selectedHour || !selectedMinute || !selectedAmPm) {
+      toast.error("Please select a complete date and time.");
       return;
     }
+
+    if (
+      isTimeSlotDisabled(selectedHour, selectedMinute, selectedAmPm, targetDate)
+    ) {
+      toast.error("The selected time slot is currently unavailable.");
+      return;
+    }
+
+    const yearStr = selectedYear;
+    const monthStr = String(parseInt(selectedMonth) + 1).padStart(2, "0");
+    const dayStr = String(selectedDay).padStart(2, "0");
+    const formattedDate = `${yearStr}-${monthStr}-${dayStr}`;
+
+    let numHour = parseInt(selectedHour);
+    const mins = parseInt(selectedMinute);
+    if (selectedAmPm === "PM" && numHour !== 12) numHour += 12;
+    if (selectedAmPm === "AM" && numHour === 12) numHour = 0;
+    const formattedTime = `${String(numHour).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
 
     setIsBooking(true);
 
@@ -203,11 +408,10 @@ const Reservation = () => {
         return;
       }
 
-      const requestedSeats = parseInt(guests);
       const timeQuery = query(
         collection(db, "reservations"),
-        where("date", "==", date),
-        where("time", "==", time),
+        where("date", "==", formattedDate),
+        where("time", "==", formattedTime),
       );
       const takenDocs = await getDocs(timeQuery);
       const takenTableIds = takenDocs.docs.map((doc) => doc.data().tableId);
@@ -270,11 +474,11 @@ const Reservation = () => {
       );
       let assignedTable = null;
 
-      if (requestedSeats > 5) {
+      if (guests > 5) {
         assignedTable = availableTables.find((t) => t.cap === 10);
       } else {
         const validTables = availableTables
-          .filter((t) => t.cap >= requestedSeats && t.cap <= 5)
+          .filter((t) => t.cap >= guests && t.cap <= 5)
           .sort((a, b) => a.cap - b.cap);
         if (validTables.length > 0) assignedTable = validTables[0];
       }
@@ -288,9 +492,9 @@ const Reservation = () => {
       await addDoc(collection(db, "reservations"), {
         userId: currentUser.uid,
         email: currentUser.email || "No email",
-        date: date,
-        time: time,
-        guests: requestedSeats,
+        date: formattedDate,
+        time: formattedTime,
+        guests: guests,
         tableId: assignedTable.id,
         area: assignedTable.area || "Main Dining Room",
         status: "Confirmed",
@@ -306,9 +510,9 @@ const Reservation = () => {
             name: currentUser.displayName || "Guest",
             status: "Confirmed",
             action: "secured",
-            date: date,
-            time: time,
-            guests: requestedSeats,
+            date: formattedDate,
+            time: formattedTime,
+            guests: guests,
             table_id: assignedTable.id,
             area: assignedTable.area || "Main Dining Room",
           },
@@ -319,7 +523,7 @@ const Reservation = () => {
       }
 
       toast.success(
-        `Confirmed! Table ${assignedTable.id} secured for ${date}.`,
+        `Confirmed! Table ${assignedTable.id} secured for ${formattedDate}.`,
       );
       navigate("/dashboard");
     } catch (error) {
@@ -330,78 +534,386 @@ const Reservation = () => {
     }
   };
 
+  const getMonthLabel = (val) => {
+    const match = months.find((m) => m.value === parseInt(val));
+    return match ? match.label : "MONTH";
+  };
+
   return (
     <div className="animate-fade-in pt-40 pb-24 bg-[#FBFBF9] min-h-screen flex items-center justify-center">
-      <div className="max-w-4xl mx-auto px-6 w-full flex flex-col md:flex-row shadow-2xl overflow-hidden bg-white">
-        <div className="md:w-1/2 relative min-h-[300px] md:min-h-[600px]">
+      <div className="max-w-6xl mx-auto px-6 w-full flex flex-col lg:flex-row shadow-2xl overflow-hidden bg-white">
+        {/* Visual Showcase (Left Side) */}
+        <div className="lg:w-2/5 relative min-h-[300px] lg:min-h-auto">
           <img
             src="https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=1974&auto=format&fit=crop"
             alt="Dining Table"
             className="absolute inset-0 w-full h-full object-cover"
           />
-          <div className="absolute inset-0 bg-stone-900/30"></div>
+          <div className="absolute inset-0 bg-stone-900/40"></div>
           <div className="absolute bottom-10 left-10 text-white">
-            <h3 className="font-serif text-3xl tracking-widest uppercase mb-2">
+            <h3 className="font-serif text-3xl tracking-[0.2em] uppercase mb-2">
               Secure
             </h3>
-            <h3 className="font-serif text-3xl tracking-widest uppercase text-gold">
+            <h3 className="font-serif text-3xl tracking-[0.2em] uppercase text-[#D4AF37]">
               Your Table
             </h3>
           </div>
         </div>
 
-        <div className="md:w-1/2 p-8 md:p-12 lg:p-16 flex flex-col justify-center">
-          <h4 className="text-xs tracking-[0.3em] uppercase text-gold mb-8 font-medium">
-            Table Allocation
+        {/* Styled Interactive Form (Right Side) */}
+        <div className="lg:w-3/5 p-8 md:p-12 lg:p-16 flex flex-col justify-center">
+          <h4 className="text-xs tracking-[0.3em] uppercase text-[#D4AF37] mb-10 font-semibold border-b border-stone-100 pb-4">
+            Bespoke Table Allocation
           </h4>
 
-          <form onSubmit={handleReservation} className="space-y-8">
+          <form onSubmit={handleReservationSubmit} className="space-y-10">
+            {/* Step 1: Select Party Size */}
             <div className="flex flex-col">
-              <label className="text-xs tracking-[0.2em] uppercase text-stone-500 mb-2 font-medium">
-                Date
+              <label className="text-[10px] tracking-[0.2em] uppercase text-stone-500 mb-4 font-semibold">
+                Party Size
               </label>
-              <input
-                type="date"
-                required
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="bg-transparent border-b border-stone-300 py-3 focus:outline-none focus:border-gold transition-colors font-medium text-stone-800"
-              />
-            </div>
-            <div className="flex flex-col">
-              <label className="text-xs tracking-[0.2em] uppercase text-stone-500 mb-2 font-medium">
-                Time
-              </label>
-              <input
-                type="time"
-                required
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className="bg-transparent border-b border-stone-300 py-3 focus:outline-none focus:border-gold transition-colors font-medium text-stone-800"
-              />
-            </div>
-            <div className="flex flex-col">
-              <label className="text-xs tracking-[0.2em] uppercase text-stone-500 mb-2 font-medium">
-                Guests
-              </label>
-              <select
-                value={guests}
-                onChange={(e) => setGuests(e.target.value)}
-                className="bg-transparent border-b border-stone-300 py-3 focus:outline-none focus:border-gold transition-colors font-medium text-stone-800 appearance-none"
-              >
-                <option value="1">1 Person</option>
-                <option value="2">2 People</option>
-                <option value="3">3 People</option>
-                <option value="4">4 People</option>
-                <option value="5">5 People</option>
-                <option value="10">6-10 People (Grand Enclosure)</option>
-              </select>
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                {[1, 2, 3, 4, 5, 10].map((num) => (
+                  <button
+                    key={num}
+                    type="button"
+                    onClick={() => setGuests(num)}
+                    className={`py-3 text-xs uppercase tracking-wider transition-all duration-300 font-medium border ${
+                      guests === num
+                        ? "bg-stone-900 border-stone-900 text-white"
+                        : "border-stone-200 text-stone-800 hover:border-stone-900"
+                    }`}
+                  >
+                    {num === 10 ? "6-10" : num} {num === 1 ? "Guest" : "Guests"}
+                  </button>
+                ))}
+              </div>
+              {guests === 10 && (
+                <p className="text-[10px] text-[#D4AF37] mt-2 tracking-widest uppercase">
+                  Assigned to the luxury Grand Enclosure
+                </p>
+              )}
             </div>
 
+            {/* Step 2: Custom Dropdown Selectors for DAY | MONTH | YEAR */}
+            <div className="flex flex-col">
+              <label className="text-[10px] tracking-[0.2em] uppercase text-stone-500 mb-4 font-semibold">
+                Select Date
+              </label>
+              <div className="grid grid-cols-3 gap-4">
+                {/* Column 1: DAY */}
+                <div className="relative" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    disabled={selectedMonth === "" || !selectedYear}
+                    onClick={() => {
+                      setDayDropdownOpen(!dayDropdownOpen);
+                      setMonthDropdownOpen(false);
+                      setYearDropdownOpen(false);
+                      setHourDropdownOpen(false);
+                      setMinuteDropdownOpen(false);
+                      setAmPmDropdownOpen(false);
+                    }}
+                    className="w-full py-3.5 px-4 bg-stone-50 border border-stone-200 text-stone-800 text-xs uppercase tracking-widest font-semibold flex justify-between items-center transition-all duration-300 hover:border-stone-900 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <span>
+                      {selectedDay !== "" ? `Day ${selectedDay}` : "DAY"}
+                    </span>
+                    <span className="text-[9px] text-[#D4AF37]">▼</span>
+                  </button>
+
+                  {dayDropdownOpen && (
+                    <div className="absolute left-0 right-0 mt-1 max-h-[200px] overflow-y-auto bg-stone-900 text-white border border-stone-800 z-50 shadow-xl">
+                      {getAvailableDays().map((d) => (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => {
+                            setSelectedDay(d);
+                            setDayDropdownOpen(false);
+                          }}
+                          className="w-full py-2.5 px-4 text-left text-xs tracking-wider transition-colors hover:bg-[#D4AF37] font-semibold border-b border-stone-800"
+                        >
+                          {d}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Column 2: MONTH */}
+                <div className="relative" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    disabled={!selectedYear}
+                    onClick={() => {
+                      setMonthDropdownOpen(!monthDropdownOpen);
+                      setDayDropdownOpen(false);
+                      setYearDropdownOpen(false);
+                      setHourDropdownOpen(false);
+                      setMinuteDropdownOpen(false);
+                      setAmPmDropdownOpen(false);
+                    }}
+                    className="w-full py-3.5 px-4 bg-stone-50 border border-stone-200 text-stone-800 text-xs uppercase tracking-widest font-semibold flex justify-between items-center transition-all duration-300 hover:border-stone-900 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <span>
+                      {selectedMonth !== ""
+                        ? getMonthLabel(selectedMonth)
+                        : "MONTH"}
+                    </span>
+                    <span className="text-[9px] text-[#D4AF37]">▼</span>
+                  </button>
+
+                  {monthDropdownOpen && (
+                    <div className="absolute left-0 right-0 mt-1 max-h-[200px] overflow-y-auto bg-stone-900 text-white border border-stone-800 z-50 shadow-xl">
+                      {getAvailableMonths().map((m) => (
+                        <button
+                          key={m.value}
+                          type="button"
+                          onClick={() => {
+                            setSelectedMonth(String(m.value));
+                            setMonthDropdownOpen(false);
+                          }}
+                          className="w-full py-2.5 px-4 text-left text-xs uppercase tracking-wider transition-colors hover:bg-[#D4AF37] font-semibold border-b border-stone-800"
+                        >
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Column 3: YEAR */}
+                <div className="relative" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setYearDropdownOpen(!yearDropdownOpen);
+                      setDayDropdownOpen(false);
+                      setMonthDropdownOpen(false);
+                      setHourDropdownOpen(false);
+                      setMinuteDropdownOpen(false);
+                      setAmPmDropdownOpen(false);
+                    }}
+                    className="w-full py-3.5 px-4 bg-stone-50 border border-stone-200 text-stone-800 text-xs uppercase tracking-widest font-semibold flex justify-between items-center transition-all duration-300 hover:border-stone-900"
+                  >
+                    <span>{selectedYear || "YEAR"}</span>
+                    <span className="text-[9px] text-[#D4AF37]">▼</span>
+                  </button>
+
+                  {yearDropdownOpen && (
+                    <div className="absolute left-0 right-0 mt-1 bg-stone-900 text-white border border-stone-800 z-50 shadow-xl">
+                      {years.map((y) => (
+                        <button
+                          key={y}
+                          type="button"
+                          onClick={() => {
+                            setSelectedYear(String(y));
+                            setYearDropdownOpen(false);
+                          }}
+                          className="w-full py-2.5 px-4 text-left text-xs tracking-wider transition-colors hover:bg-[#D4AF37] font-semibold border-b border-stone-800"
+                        >
+                          {y}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Step 3: Custom Dropdown Selectors for HOUR | MINUTE | AM/PM */}
+            <div className="flex flex-col">
+              <label className="text-[10px] tracking-[0.2em] uppercase text-stone-500 mb-4 font-semibold">
+                Select Time
+              </label>
+              {selectedDay === "" || selectedMonth === "" || !selectedYear ? (
+                <p className="text-xs text-stone-400 italic tracking-wide">
+                  Please specify a valid calendar date first.
+                </p>
+              ) : (
+                <div className="grid grid-cols-3 gap-4">
+                  {/* Column 1: HOUR */}
+                  <div
+                    className="relative"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHourDropdownOpen(!hourDropdownOpen);
+                        setDayDropdownOpen(false);
+                        setMonthDropdownOpen(false);
+                        setYearDropdownOpen(false);
+                        setMinuteDropdownOpen(false);
+                        setAmPmDropdownOpen(false);
+                      }}
+                      className="w-full py-3.5 px-4 bg-stone-50 border border-stone-200 text-stone-800 text-xs uppercase tracking-widest font-semibold flex justify-between items-center transition-all duration-300 hover:border-stone-900"
+                    >
+                      <span>
+                        {selectedHour !== "" ? `${selectedHour} h` : "HOUR"}
+                      </span>
+                      <span className="text-[9px] text-[#D4AF37]">▼</span>
+                    </button>
+
+                    {hourDropdownOpen && (
+                      <div className="absolute left-0 right-0 mt-1 max-h-[160px] overflow-y-auto bg-stone-900 text-white border border-stone-800 z-50 shadow-xl">
+                        {hours.map((h) => {
+                          const disabled = isTimeSlotDisabled(
+                            h,
+                            selectedMinute || "00",
+                            selectedAmPm || "PM",
+                            getConstructedDate(),
+                          );
+                          return (
+                            <button
+                              key={h}
+                              type="button"
+                              disabled={disabled}
+                              onClick={() => {
+                                setSelectedHour(h);
+                                setHourDropdownOpen(false);
+                              }}
+                              className={`w-full py-2.5 px-4 text-left text-xs tracking-wider transition-colors font-semibold border-b border-stone-800 ${
+                                disabled
+                                  ? "text-stone-600 cursor-not-allowed bg-stone-950/40"
+                                  : "hover:bg-[#D4AF37]"
+                              }`}
+                            >
+                              {h}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Column 2: MINUTE */}
+                  <div
+                    className="relative"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMinuteDropdownOpen(!minuteDropdownOpen);
+                        setDayDropdownOpen(false);
+                        setMonthDropdownOpen(false);
+                        setYearDropdownOpen(false);
+                        setHourDropdownOpen(false);
+                        setAmPmDropdownOpen(false);
+                      }}
+                      className="w-full py-3.5 px-4 bg-stone-50 border border-stone-200 text-stone-800 text-xs uppercase tracking-widest font-semibold flex justify-between items-center transition-all duration-300 hover:border-stone-900"
+                    >
+                      <span>
+                        {selectedMinute !== ""
+                          ? `${selectedMinute} m`
+                          : "MINUTE"}
+                      </span>
+                      <span className="text-[9px] text-[#D4AF37]">▼</span>
+                    </button>
+
+                    {minuteDropdownOpen && (
+                      <div className="absolute left-0 right-0 mt-1 max-h-[200px] overflow-y-auto bg-stone-900 text-white border border-stone-800 z-50 shadow-xl">
+                        {minutes.map((m) => {
+                          const disabled = isTimeSlotDisabled(
+                            selectedHour || "12",
+                            m,
+                            selectedAmPm || "PM",
+                            getConstructedDate(),
+                          );
+                          return (
+                            <button
+                              key={m}
+                              type="button"
+                              disabled={disabled}
+                              onClick={() => {
+                                setSelectedMinute(m);
+                                setMinuteDropdownOpen(false);
+                              }}
+                              className={`w-full py-2.5 px-4 text-left text-xs tracking-wider transition-colors font-semibold border-b border-stone-800 ${
+                                disabled
+                                  ? "text-stone-600 cursor-not-allowed bg-stone-950/40"
+                                  : "hover:bg-[#D4AF37]"
+                              }`}
+                            >
+                              {m}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Column 3: AM/PM */}
+                  <div
+                    className="relative"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAmPmDropdownOpen(!amPmDropdownOpen);
+                        setDayDropdownOpen(false);
+                        setMonthDropdownOpen(false);
+                        setYearDropdownOpen(false);
+                        setHourDropdownOpen(false);
+                        setMinuteDropdownOpen(false);
+                      }}
+                      className="w-full py-3.5 px-4 bg-stone-50 border border-stone-200 text-stone-800 text-xs uppercase tracking-widest font-semibold flex justify-between items-center transition-all duration-300 hover:border-stone-900"
+                    >
+                      <span>{selectedAmPm || "AM / PM"}</span>
+                      <span className="text-[9px] text-[#D4AF37]">▼</span>
+                    </button>
+
+                    {amPmDropdownOpen && (
+                      <div className="absolute left-0 right-0 mt-1 bg-stone-900 text-white border border-stone-800 z-50 shadow-xl">
+                        {amPmOptions.map((p) => {
+                          const disabled = isTimeSlotDisabled(
+                            selectedHour || "12",
+                            selectedMinute || "00",
+                            p,
+                            getConstructedDate(),
+                          );
+                          return (
+                            <button
+                              key={p}
+                              type="button"
+                              disabled={disabled}
+                              onClick={() => {
+                                setSelectedAmPm(p);
+                                setAmPmDropdownOpen(false);
+                              }}
+                              className={`w-full py-2.5 px-4 text-left text-xs tracking-wider transition-colors font-semibold border-b border-stone-800 ${
+                                disabled
+                                  ? "text-stone-600 cursor-not-allowed bg-stone-950/40"
+                                  : "hover:bg-[#D4AF37]"
+                              }`}
+                            >
+                              {p}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Submit Action */}
             <button
               type="submit"
-              disabled={isBooking}
-              className="w-full bg-stone-900 text-white px-12 py-5 uppercase tracking-[0.2em] text-xs hover:bg-gold transition-all duration-500 font-medium mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={
+                isBooking ||
+                selectedDay === "" ||
+                selectedMonth === "" ||
+                !selectedYear ||
+                !selectedHour ||
+                !selectedMinute ||
+                !selectedAmPm
+              }
+              className="w-full bg-stone-900 text-white px-12 py-5 uppercase tracking-[0.2em] text-xs hover:bg-[#D4AF37] transition-all duration-500 font-medium mt-4 disabled:opacity-30 disabled:cursor-not-allowed"
             >
               {isBooking ? "Confirming..." : "Request Booking"}
             </button>
