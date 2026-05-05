@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import {
-  BrowserRouter,
+  HashRouter,
   Routes,
   Route,
   Link,
@@ -35,7 +35,7 @@ const ScrollToTop = () => {
 
 const App = () => {
   return (
-    <BrowserRouter basename="/restro-cafe">
+    <HashRouter>
       <ScrollToTop />
       <div className="min-h-screen bg-[#FBFBF9] text-stone-900 font-sans selection:bg-[#D4AF37] selection:text-white flex flex-col">
         <Toaster
