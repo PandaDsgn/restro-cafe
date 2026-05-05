@@ -844,7 +844,7 @@ const Home = () => {
       title: "CULINARY HERITAGE",
       text: "Rooted in the royal kitchens of the past, our techniques pay homage to centuries of gastronomic evolution. We meticulously preserve authentic cooking methods over slow charcoal fires, presenting them to you with contemporary finesse.",
       image:
-        "https://unsplash.com/photos/a-wooden-table-topped-with-bowls-of-food--wwqCHHphYY?q=80&w=2000&auto=format&fit=crop",
+        "https://images.unsplash.com/photo-1585937421612-70a008356fbe?q=80&w=2000&auto=format&fit=crop",
     },
   ];
 
