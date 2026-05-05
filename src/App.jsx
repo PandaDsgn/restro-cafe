@@ -35,7 +35,7 @@ const ScrollToTop = () => {
 
 const App = () => {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/restro-cafe">
       <ScrollToTop />
       <div className="min-h-screen bg-[#FBFBF9] text-stone-900 font-sans selection:bg-[#D4AF37] selection:text-white flex flex-col">
         <Toaster
@@ -163,9 +163,6 @@ const SmallGoldDivider = () => (
   </div>
 );
 
-// ----------------------------------------------------
-// DEDICATED RESERVATION PAGE
-// ----------------------------------------------------
 const Reservation = () => {
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
@@ -300,7 +297,6 @@ const Reservation = () => {
         createdAt: serverTimestamp(),
       });
 
-      // EmailJS with Dynamic Active Template
       try {
         await emailjs.send(
           import.meta.env.VITE_EMAILJS_SERVICE_ID,
@@ -308,8 +304,8 @@ const Reservation = () => {
           {
             to_email: currentUser.email,
             name: currentUser.displayName || "Guest",
-            status: "Confirmed", // Dynamic Word 1
-            action: "secured", // Dynamic Word 2
+            status: "Confirmed",
+            action: "secured",
             date: date,
             time: time,
             guests: requestedSeats,
@@ -337,7 +333,6 @@ const Reservation = () => {
   return (
     <div className="animate-fade-in pt-40 pb-24 bg-[#FBFBF9] min-h-screen flex items-center justify-center">
       <div className="max-w-4xl mx-auto px-6 w-full flex flex-col md:flex-row shadow-2xl overflow-hidden bg-white">
-        {/* Left Side Image */}
         <div className="md:w-1/2 relative min-h-[300px] md:min-h-[600px]">
           <img
             src="https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=1974&auto=format&fit=crop"
@@ -355,7 +350,6 @@ const Reservation = () => {
           </div>
         </div>
 
-        {/* Right Side Form */}
         <div className="md:w-1/2 p-8 md:p-12 lg:p-16 flex flex-col justify-center">
           <h4 className="text-xs tracking-[0.3em] uppercase text-gold mb-8 font-medium">
             Table Allocation
@@ -418,9 +412,6 @@ const Reservation = () => {
   );
 };
 
-// ----------------------------------------------------
-// DASHBOARD COMPONENT
-// ----------------------------------------------------
 const Dashboard = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
@@ -488,7 +479,7 @@ const Dashboard = () => {
         try {
           await emailjs.send(
             import.meta.env.VITE_EMAILJS_SERVICE_ID,
-            import.meta.env.VITE_EMAILJS_CANCEL_TEMPLATE_ID, // Cancel Template
+            import.meta.env.VITE_EMAILJS_CANCEL_TEMPLATE_ID,
             {
               to_email: currentUser.email,
               name: currentUser.displayName || "Guest",
@@ -618,12 +609,12 @@ const Dashboard = () => {
       try {
         await emailjs.send(
           import.meta.env.VITE_EMAILJS_SERVICE_ID,
-          import.meta.env.VITE_EMAILJS_ACTIVE_TEMPLATE_ID, // Use Active Template
+          import.meta.env.VITE_EMAILJS_ACTIVE_TEMPLATE_ID,
           {
             to_email: currentUser.email,
             name: currentUser.displayName || "Guest",
-            status: "Updated", // Dynamic Word 1
-            action: "updated", // Dynamic Word 2
+            status: "Updated",
+            action: "updated",
             date: editDate,
             time: editTime,
             guests: requestedSeats,
@@ -824,9 +815,6 @@ const Dashboard = () => {
   );
 };
 
-// ----------------------------------------------------
-// HOME COMPONENT
-// ----------------------------------------------------
 const Home = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
 
@@ -856,7 +844,7 @@ const Home = () => {
       title: "CULINARY HERITAGE",
       text: "Rooted in the royal kitchens of the past, our techniques pay homage to centuries of gastronomic evolution. We meticulously preserve authentic cooking methods over slow charcoal fires, presenting them to you with contemporary finesse.",
       image:
-        "https://images.unsplash.com/photo-1583394838336-acd977736f90?q=80&w=2000&auto=format&fit=crop",
+        "https://unsplash.com/photos/a-wooden-table-topped-with-bowls-of-food--wwqCHHphYY?q=80&w=2000&auto=format&fit=crop",
     },
   ];
 
@@ -1176,9 +1164,6 @@ const Menu = () => {
   );
 };
 
-// ----------------------------------------------------
-// UPDATED CONTACT COMPONENT (Now Wired Up!)
-// ----------------------------------------------------
 const Contact = () => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -1207,7 +1192,6 @@ const Contact = () => {
 
       toast.success("Inquiry sent. Our concierge will reach out shortly.");
 
-      // Clear the form
       setName("");
       setEmail("");
       setType("General Reservation");
