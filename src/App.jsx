@@ -117,6 +117,7 @@ const CartDrawer = () => {
   const navigate = useNavigate();
 
   const [isCheckout, setIsCheckout] = useState(false);
+  const [orderType, setOrderType] = useState("Delivery");
   const [address, setAddress] = useState("");
   const [isLocating, setIsLocating] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -174,7 +175,7 @@ const CartDrawer = () => {
       navigate("/auth");
       return;
     }
-    if (!address.trim()) {
+    if (orderType === "Delivery" && !address.trim()) {
       toast.error("Please provide a delivery address.");
       return;
     }
@@ -202,7 +203,7 @@ const CartDrawer = () => {
         amount: orderData.amount,
         currency: orderData.currency,
         name: "The Restro-Cafe",
-        description: "Luxury Dining Delivery",
+        description: "Luxury Dining",
         order_id: orderData.id,
         handler: async function (response) {
           try {
@@ -211,7 +212,9 @@ const CartDrawer = () => {
               email: currentUser.email,
               items: cart,
               total: cartTotal,
-              address: address,
+              orderType: orderType,
+              address:
+                orderType === "Delivery" ? address : "Takeaway / Dine-In",
               paymentId: response.razorpay_payment_id,
               orderId: response.razorpay_order_id,
               status: "Preparing",
@@ -345,48 +348,72 @@ const CartDrawer = () => {
                     </div>
                   </div>
 
-                  <div className="flex flex-col">
-                    <div className="flex justify-between items-end mb-2">
-                      <label className="text-[10px] tracking-[0.2em] uppercase text-stone-500 font-semibold">
-                        Delivery Address
-                      </label>
+                  <div className="flex flex-col space-y-3">
+                    <label className="text-[10px] tracking-[0.2em] uppercase text-stone-500 mb-1 font-semibold">
+                      Order Type
+                    </label>
+                    <div className="grid grid-cols-2 gap-4">
                       <button
                         type="button"
-                        onClick={handleGetLocation}
-                        disabled={isLocating}
-                        className="text-[9px] text-[#D4AF37] uppercase tracking-widest font-bold flex items-center hover:text-stone-900 transition-colors disabled:opacity-50"
+                        onClick={() => setOrderType("Delivery")}
+                        className={`py-3 text-xs uppercase tracking-widest font-semibold border transition-all ${orderType === "Delivery" ? "border-[#D4AF37] bg-[#D4AF37]/5 text-stone-900" : "border-stone-200 text-stone-500 hover:border-stone-300"}`}
                       >
-                        <svg
-                          className="w-3 h-3 mr-1"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth="2"
-                            d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                          />
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth="2"
-                            d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                          />
-                        </svg>
-                        {isLocating ? "Locating..." : "Auto-Detect"}
+                        Delivery
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setOrderType("Takeaway")}
+                        className={`py-3 text-xs uppercase tracking-widest font-semibold border transition-all ${orderType === "Takeaway" ? "border-[#D4AF37] bg-[#D4AF37]/5 text-stone-900" : "border-stone-200 text-stone-500 hover:border-stone-300"}`}
+                      >
+                        Dine-in / Takeaway
                       </button>
                     </div>
-                    <textarea
-                      required
-                      value={address}
-                      onChange={(e) => setAddress(e.target.value)}
-                      rows="3"
-                      className="bg-transparent border border-stone-300 p-3 focus:outline-none focus:border-[#D4AF37] transition-colors font-medium text-stone-800 text-xs resize-none"
-                      placeholder="Enter complete address..."
-                    />
                   </div>
+
+                  {orderType === "Delivery" && (
+                    <div className="flex flex-col animate-fade-in">
+                      <div className="flex justify-between items-end mb-2">
+                        <label className="text-[10px] tracking-[0.2em] uppercase text-stone-500 font-semibold">
+                          Delivery Address
+                        </label>
+                        <button
+                          type="button"
+                          onClick={handleGetLocation}
+                          disabled={isLocating}
+                          className="text-[9px] text-[#D4AF37] uppercase tracking-widest font-bold flex items-center hover:text-stone-900 transition-colors disabled:opacity-50"
+                        >
+                          <svg
+                            className="w-3 h-3 mr-1"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                            />
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                            />
+                          </svg>
+                          {isLocating ? "Locating..." : "Auto-Detect"}
+                        </button>
+                      </div>
+                      <textarea
+                        required
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        rows="3"
+                        className="bg-transparent border border-stone-300 p-3 focus:outline-none focus:border-[#D4AF37] transition-colors font-medium text-stone-800 text-xs resize-none"
+                        placeholder="Enter complete address..."
+                      />
+                    </div>
+                  )}
                 </form>
               ) : (
                 <div className="space-y-6">
@@ -1597,7 +1624,7 @@ const Dashboard = () => {
 
         <div>
           <h3 className="text-xs tracking-[0.3em] uppercase text-[#D4AF37] mb-6 font-semibold border-b border-stone-200 pb-2">
-            Delivery Orders
+            Orders
           </h3>
           {orders.length === 0 ? (
             <div className="bg-white border border-stone-200 p-8 text-center shadow-sm">
@@ -1625,7 +1652,7 @@ const Dashboard = () => {
                     <p className="font-serif text-lg text-stone-900 mb-1">
                       {formatPrice(order.total)}{" "}
                       <span className="text-xs font-sans text-stone-500 tracking-wide ml-2">
-                        via {order.paymentMethod}
+                        via Razorpay • {order.orderType || "Delivery"}
                       </span>
                     </p>
                     <p className="text-xs text-stone-500 font-medium">
