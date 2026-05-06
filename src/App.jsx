@@ -165,7 +165,7 @@ const SmallGoldDivider = () => (
 
 const Reservation = () => {
   const [selectedDay, setSelectedDay] = useState("");
-  const [selectedMonth, setSelectedMonth] = useState(""); // 0-indexed string (e.g., "0" for Jan)
+  const [selectedMonth, setSelectedMonth] = useState("");
   const [selectedYear, setSelectedYear] = useState("");
   const [selectedHour, setSelectedHour] = useState("");
   const [selectedMinute, setSelectedMinute] = useState("");
@@ -173,7 +173,6 @@ const Reservation = () => {
   const [guests, setGuests] = useState(2);
   const [isBooking, setIsBooking] = useState(false);
 
-  // Custom Dropdown Open States
   const [dayDropdownOpen, setDayDropdownOpen] = useState(false);
   const [monthDropdownOpen, setMonthDropdownOpen] = useState(false);
   const [yearDropdownOpen, setYearDropdownOpen] = useState(false);
@@ -218,7 +217,6 @@ const Reservation = () => {
     { value: 11, label: "December" },
   ];
 
-  // Auto-close open panels when clicking elsewhere on the window
   useEffect(() => {
     const closeAllMenus = () => {
       setDayDropdownOpen(false);
@@ -267,9 +265,8 @@ const Reservation = () => {
     return months;
   };
 
-  // Safe generation of padded values
-  const hours = Array.from({ length: 12 }, (_, i) => String(i + 1));
-  const minutes = Array.from({ length: 60 }, (_, i) =>
+  const hoursList = Array.from({ length: 12 }, (_, i) => String(i + 1));
+  const minutesList = Array.from({ length: 60 }, (_, i) =>
     String(i).padStart(2, "0"),
   );
   const amPmOptions = ["AM", "PM"];
@@ -292,7 +289,6 @@ const Reservation = () => {
     let numHour = parseInt(hour);
     const mins = parseInt(minute);
 
-    // Strict block of 1 AM to 6 AM
     if (amPm === "AM" && numHour >= 1 && numHour <= 6) {
       return true;
     }
@@ -309,13 +305,11 @@ const Reservation = () => {
     return targetDateTime.getTime() - now.getTime() < minAdvanceWindowMs;
   };
 
-  // Declarative selection validator to prevent aggressive resetting
   useEffect(() => {
     const numYear = selectedYear ? parseInt(selectedYear) : null;
     const numMonth = selectedMonth !== "" ? parseInt(selectedMonth) : null;
     const numDay = selectedDay !== "" ? parseInt(selectedDay) : null;
 
-    // 1. Prune selected month if it becomes a past month (e.g. changing from next year to current year)
     if (numYear !== null && numMonth !== null) {
       if (numYear === currentYear && numMonth < currentMonth) {
         setSelectedMonth("");
@@ -327,7 +321,6 @@ const Reservation = () => {
       }
     }
 
-    // 2. Prune selected day if it exceeds the maximum days in a newly selected month/year, or is in the past
     if (numYear !== null && numMonth !== null && numDay !== null) {
       const maxDays = getDaysInMonth(numMonth, numYear);
       const isPastDay =
@@ -344,7 +337,6 @@ const Reservation = () => {
       }
     }
 
-    // 3. Prune selected time values if they now violate the 12-hour warning window under the newly updated date configuration
     if (selectedHour && selectedMinute && selectedAmPm) {
       const constructedDate = getConstructedDate();
       if (constructedDate) {
@@ -554,7 +546,6 @@ const Reservation = () => {
   return (
     <div className="animate-fade-in pt-40 pb-24 bg-[#FBFBF9] min-h-screen flex items-center justify-center">
       <div className="max-w-6xl mx-auto px-6 w-full flex flex-col lg:flex-row shadow-2xl overflow-hidden bg-white">
-        {/* Visual Showcase (Left Side) */}
         <div className="lg:w-2/5 relative min-h-[300px] lg:min-h-auto">
           <img
             src="https://images.unsplash.com/photo-1559339352-11d035aa65de?q=80&w=1974&auto=format&fit=crop"
@@ -572,14 +563,12 @@ const Reservation = () => {
           </div>
         </div>
 
-        {/* Styled Interactive Form (Right Side) */}
         <div className="lg:w-3/5 p-8 md:p-12 lg:p-16 flex flex-col justify-center">
           <h4 className="text-xs tracking-[0.3em] uppercase text-[#D4AF37] mb-10 font-semibold border-b border-stone-100 pb-4">
             Bespoke Table Allocation
           </h4>
 
           <form onSubmit={handleReservationSubmit} className="space-y-10">
-            {/* Step 1: Select Party Size */}
             <div className="flex flex-col">
               <label className="text-[10px] tracking-[0.2em] uppercase text-stone-500 mb-4 font-semibold">
                 Party Size
@@ -607,13 +596,11 @@ const Reservation = () => {
               )}
             </div>
 
-            {/* Step 2: Custom Dropdown Selectors for DAY | MONTH | YEAR */}
             <div className="flex flex-col">
               <label className="text-[10px] tracking-[0.2em] uppercase text-stone-500 mb-4 font-semibold">
                 Select Date
               </label>
               <div className="grid grid-cols-3 gap-4">
-                {/* Column 1: DAY */}
                 <div className="relative" onClick={(e) => e.stopPropagation()}>
                   <button
                     type="button"
@@ -653,7 +640,6 @@ const Reservation = () => {
                   )}
                 </div>
 
-                {/* Column 2: MONTH */}
                 <div className="relative" onClick={(e) => e.stopPropagation()}>
                   <button
                     type="button"
@@ -695,7 +681,6 @@ const Reservation = () => {
                   )}
                 </div>
 
-                {/* Column 3: YEAR */}
                 <div className="relative" onClick={(e) => e.stopPropagation()}>
                   <button
                     type="button"
@@ -714,7 +699,7 @@ const Reservation = () => {
                   </button>
 
                   {yearDropdownOpen && (
-                    <div className="absolute left-0 right-0 mt-1 bg-stone-900 text-white border border-stone-800 z-50 shadow-xl">
+                    <div className="absolute left-0 right-0 mt-1 max-h-[200px] overflow-y-auto bg-stone-900 text-white border border-stone-800 z-50 shadow-xl">
                       {years.map((y) => (
                         <button
                           key={y}
@@ -734,7 +719,6 @@ const Reservation = () => {
               </div>
             </div>
 
-            {/* Step 3: Custom Dropdown Selectors for HOUR | MINUTE | AM/PM */}
             <div className="flex flex-col">
               <label className="text-[10px] tracking-[0.2em] uppercase text-stone-500 mb-4 font-semibold">
                 Select Time
@@ -745,7 +729,6 @@ const Reservation = () => {
                 </p>
               ) : (
                 <div className="grid grid-cols-3 gap-4">
-                  {/* Column 1: HOUR */}
                   <div
                     className="relative"
                     onClick={(e) => e.stopPropagation()}
@@ -770,7 +753,7 @@ const Reservation = () => {
 
                     {hourDropdownOpen && (
                       <div className="absolute left-0 right-0 mt-1 max-h-[160px] overflow-y-auto bg-stone-900 text-white border border-stone-800 z-50 shadow-xl">
-                        {hours.map((h) => {
+                        {hoursList.map((h) => {
                           const disabled = isTimeSlotDisabled(
                             h,
                             selectedMinute || "00",
@@ -800,7 +783,6 @@ const Reservation = () => {
                     )}
                   </div>
 
-                  {/* Column 2: MINUTE */}
                   <div
                     className="relative"
                     onClick={(e) => e.stopPropagation()}
@@ -827,7 +809,7 @@ const Reservation = () => {
 
                     {minuteDropdownOpen && (
                       <div className="absolute left-0 right-0 mt-1 max-h-[200px] overflow-y-auto bg-stone-900 text-white border border-stone-800 z-50 shadow-xl">
-                        {minutes.map((m) => {
+                        {minutesList.map((m) => {
                           const disabled = isTimeSlotDisabled(
                             selectedHour || "12",
                             m,
@@ -857,7 +839,6 @@ const Reservation = () => {
                     )}
                   </div>
 
-                  {/* Column 3: AM/PM */}
                   <div
                     className="relative"
                     onClick={(e) => e.stopPropagation()}
@@ -913,7 +894,6 @@ const Reservation = () => {
               )}
             </div>
 
-            {/* Submit Action */}
             <button
               type="submit"
               disabled={
