@@ -26,11 +26,9 @@ import {
 } from "firebase/firestore";
 import emailjs from "@emailjs/browser";
 
-// --- Utility Functions ---
 const parsePrice = (priceStr) => parseInt(priceStr.replace(/[^0-9]/g, ""), 10);
 const formatPrice = (num) => `₹ ${num.toLocaleString("en-IN")}`;
 
-// --- Cart Context ---
 const CartContext = createContext();
 const useCart = () => useContext(CartContext);
 
@@ -105,8 +103,6 @@ const ScrollToTop = () => {
   return null;
 };
 
-// --- Cart Drawer Component ---
-// --- Cart Drawer Component ---
 const CartDrawer = () => {
   const {
     cart,
@@ -122,15 +118,55 @@ const CartDrawer = () => {
 
   const [isCheckout, setIsCheckout] = useState(false);
   const [address, setAddress] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("UPI");
+  const [isLocating, setIsLocating] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  // New States for our Mock Gateway
-  const [showMockGateway, setShowMockGateway] = useState(false);
-  const [gatewayStatus, setGatewayStatus] = useState(
-    "Initializing Secure Connection...",
-  );
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error("Geolocation is not supported by your browser.");
+      return;
+    }
+    setIsLocating(true);
+    toast.loading("Detecting precise location...", { id: "location-toast" });
 
-  const handleCheckout = (e) => {
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude } = position.coords;
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
+          );
+          const data = await response.json();
+          if (data && data.display_name) {
+            setAddress(data.display_name);
+            toast.success("Location mapped successfully!", {
+              id: "location-toast",
+            });
+          } else {
+            throw new Error("Address mapping failed");
+          }
+        } catch (error) {
+          toast.error("Failed to translate GPS coordinates.", {
+            id: "location-toast",
+          });
+        } finally {
+          setIsLocating(false);
+        }
+      },
+      (error) => {
+        setIsLocating(false);
+        if (error.code === 1)
+          toast.error("Access denied. Please enable location permissions.", {
+            id: "location-toast",
+          });
+        else
+          toast.error("Unable to fetch GPS signal.", { id: "location-toast" });
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+    );
+  };
+
+  const loadRazorpay = async (e) => {
     e.preventDefault();
     if (!currentUser) {
       toast.error("Please log in to place an order.");
@@ -138,161 +174,88 @@ const CartDrawer = () => {
       navigate("/auth");
       return;
     }
-
     if (!address.trim()) {
       toast.error("Please provide a delivery address.");
       return;
     }
 
-    // Launch the mock gateway instead of a real backend
-    setShowMockGateway(true);
+    setIsProcessing(true);
 
-    // Simulate the steps of a real payment processor
-    setTimeout(
-      () => setGatewayStatus(`Awaiting ${paymentMethod} Authorization...`),
-      1500,
-    );
-    setTimeout(
-      () => setGatewayStatus("Verifying Transaction Signature..."),
-      3000,
-    );
-    setTimeout(() => setGatewayStatus("Payment Successful!"), 4500);
+    try {
+      const orderResponse = await fetch(
+        "https://restro-cafe-background.onrender.com/api/create-order",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amount: cartTotal }),
+        },
+      );
 
-    // Finalize order after simulation
-    setTimeout(async () => {
-      try {
-        await addDoc(collection(db, "orders"), {
-          userId: currentUser.uid,
-          email: currentUser.email,
-          items: cart,
-          total: cartTotal,
-          address: address,
-          paymentMethod: paymentMethod,
-          status: "Preparing",
-          createdAt: serverTimestamp(),
-        });
+      const orderData = await orderResponse.json();
 
-        toast.success("Order confirmed and sent to kitchen.");
-        clearCart();
-        setIsCheckout(false);
-        setIsCartOpen(false);
-        setShowMockGateway(false);
-        setGatewayStatus("Initializing Secure Connection...");
-        navigate("/dashboard");
-      } catch (error) {
-        console.error("Order error:", error);
-        toast.error("Database connection failed. Please try again.");
-        setShowMockGateway(false);
+      if (!orderData || !orderData.id) {
+        throw new Error("Failed to generate Order ID");
       }
-    }, 5500);
+
+      const options = {
+        key: "rzp_test_Sm9UGah8Kj6jzK",
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: "The Restro-Cafe",
+        description: "Luxury Dining Delivery",
+        order_id: orderData.id,
+        handler: async function (response) {
+          try {
+            await addDoc(collection(db, "orders"), {
+              userId: currentUser.uid,
+              email: currentUser.email,
+              items: cart,
+              total: cartTotal,
+              address: address,
+              paymentId: response.razorpay_payment_id,
+              orderId: response.razorpay_order_id,
+              status: "Preparing",
+              createdAt: serverTimestamp(),
+            });
+
+            toast.success("Payment Successful! Order sent to kitchen.");
+            clearCart();
+            setIsCheckout(false);
+            setIsCartOpen(false);
+            navigate("/dashboard");
+          } catch (dbError) {
+            toast.error(
+              "Payment processed, but database failed. Contact support.",
+            );
+          }
+        },
+        prefill: {
+          name: currentUser.displayName || "Guest",
+          email: currentUser.email,
+        },
+        theme: {
+          color: "#D4AF37",
+        },
+      };
+
+      const rzp = new window.Razorpay(options);
+
+      rzp.on("payment.failed", function (response) {
+        toast.error(`Payment Failed: ${response.error.description}`);
+      });
+
+      rzp.open();
+    } catch (error) {
+      toast.error(
+        "Secure gateway is offline. Please ensure backend is running on port 5000.",
+      );
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
     <AnimatePresence>
-      {/* MOCK PAYMENT GATEWAY OVERLAY */}
-      {showMockGateway && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-stone-900/80 backdrop-blur-md z-[100] flex items-center justify-center"
-        >
-          <motion.div
-            initial={{ scale: 0.9, y: 20 }}
-            animate={{ scale: 1, y: 0 }}
-            className="bg-white p-8 md:p-12 max-w-md w-full mx-4 shadow-2xl flex flex-col items-center text-center border-t-4 border-[#D4AF37]"
-          >
-            {gatewayStatus === "Payment Successful!" ? (
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-6 text-green-600"
-              >
-                <svg
-                  className="w-8 h-8"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
-              </motion.div>
-            ) : (
-              <div className="relative w-16 h-16 mb-6">
-                <svg
-                  className="animate-spin w-full h-full text-stone-200"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                    fill="none"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="#D4AF37"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-[#D4AF37] text-[10px] font-bold">
-                    ₹
-                  </span>
-                </div>
-              </div>
-            )}
-
-            <h3 className="font-serif text-2xl text-stone-900 mb-2">
-              Processing Payment
-            </h3>
-            <p className="text-xs font-medium text-stone-500 tracking-widest uppercase mb-8">
-              {gatewayStatus}
-            </p>
-
-            <div className="w-full bg-stone-50 p-4 border border-stone-200 text-left">
-              <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1">
-                Amount to Pay
-              </p>
-              <p className="font-serif text-xl text-stone-900">
-                {formatPrice(cartTotal)}
-              </p>
-              <p className="text-[10px] text-stone-400 uppercase tracking-widest mt-4 mb-1">
-                Method
-              </p>
-              <p className="font-medium text-stone-800 text-sm uppercase">
-                {paymentMethod}
-              </p>
-            </div>
-
-            <p className="text-[9px] text-stone-400 mt-6 uppercase tracking-widest flex items-center gap-2">
-              <svg
-                className="w-3 h-3"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                />
-              </svg>
-              Secured by Restro-Cafe Mock Gateway
-            </p>
-          </motion.div>
-        </motion.div>
-      )}
-
       {isCartOpen && (
         <>
           <motion.div
@@ -356,7 +319,7 @@ const CartDrawer = () => {
               ) : isCheckout ? (
                 <form
                   id="checkout-form"
-                  onSubmit={handleCheckout}
+                  onSubmit={loadRazorpay}
                   className="space-y-8 animate-fade-in"
                 >
                   <div className="bg-white p-4 border border-stone-100 shadow-sm">
@@ -383,9 +346,38 @@ const CartDrawer = () => {
                   </div>
 
                   <div className="flex flex-col">
-                    <label className="text-[10px] tracking-[0.2em] uppercase text-stone-500 mb-2 font-semibold">
-                      Delivery Address
-                    </label>
+                    <div className="flex justify-between items-end mb-2">
+                      <label className="text-[10px] tracking-[0.2em] uppercase text-stone-500 font-semibold">
+                        Delivery Address
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleGetLocation}
+                        disabled={isLocating}
+                        className="text-[9px] text-[#D4AF37] uppercase tracking-widest font-bold flex items-center hover:text-stone-900 transition-colors disabled:opacity-50"
+                      >
+                        <svg
+                          className="w-3 h-3 mr-1"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                          />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                          />
+                        </svg>
+                        {isLocating ? "Locating..." : "Auto-Detect"}
+                      </button>
+                    </div>
                     <textarea
                       required
                       value={address}
@@ -395,68 +387,6 @@ const CartDrawer = () => {
                       placeholder="Enter complete address..."
                     />
                   </div>
-
-                  <div className="flex flex-col space-y-3">
-                    <label className="text-[10px] tracking-[0.2em] uppercase text-stone-500 mb-1 font-semibold">
-                      Payment Method
-                    </label>
-                    {["UPI", "Credit/Debit Card", "Net Banking"].map(
-                      (method) => (
-                        <label
-                          key={method}
-                          className={`flex items-center p-4 border cursor-pointer transition-all ${paymentMethod === method ? "border-[#D4AF37] bg-[#D4AF37]/5" : "border-stone-200 bg-white"}`}
-                        >
-                          <input
-                            type="radio"
-                            name="payment"
-                            value={method}
-                            checked={paymentMethod === method}
-                            onChange={() => setPaymentMethod(method)}
-                            className="mr-4 accent-[#D4AF37]"
-                          />
-                          <span className="text-xs uppercase tracking-widest font-semibold text-stone-800">
-                            {method}
-                          </span>
-                        </label>
-                      ),
-                    )}
-                  </div>
-
-                  {paymentMethod === "UPI" && (
-                    <input
-                      type="text"
-                      placeholder="Enter UPI ID (e.g. user@upi)"
-                      required
-                      className="w-full bg-white border border-stone-300 p-3 focus:outline-none focus:border-[#D4AF37] transition-colors font-medium text-stone-800 text-xs"
-                    />
-                  )}
-                  {paymentMethod === "Credit/Debit Card" && (
-                    <div className="space-y-2">
-                      <input
-                        type="text"
-                        placeholder="Card Number"
-                        required
-                        maxLength="16"
-                        className="w-full bg-white border border-stone-300 p-3 focus:outline-none focus:border-[#D4AF37] text-xs"
-                      />
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          placeholder="MM/YY"
-                          required
-                          maxLength="5"
-                          className="w-1/2 bg-white border border-stone-300 p-3 focus:outline-none focus:border-[#D4AF37] text-xs"
-                        />
-                        <input
-                          type="text"
-                          placeholder="CVV"
-                          required
-                          maxLength="3"
-                          className="w-1/2 bg-white border border-stone-300 p-3 focus:outline-none focus:border-[#D4AF37] text-xs"
-                        />
-                      </div>
-                    </div>
-                  )}
                 </form>
               ) : (
                 <div className="space-y-6">
@@ -535,9 +465,12 @@ const CartDrawer = () => {
                   <button
                     type="submit"
                     form="checkout-form"
+                    disabled={isProcessing}
                     className="w-full bg-stone-900 text-white py-4 uppercase tracking-[0.2em] text-xs hover:bg-[#D4AF37] transition-colors font-medium flex justify-center items-center"
                   >
-                    Pay {formatPrice(cartTotal)}
+                    {isProcessing
+                      ? "Initializing Secure Gateway..."
+                      : `Pay ${formatPrice(cartTotal)}`}
                   </button>
                 ) : (
                   <button
@@ -547,7 +480,7 @@ const CartDrawer = () => {
                     Proceed to Checkout
                   </button>
                 )}
-                {isCheckout && (
+                {isCheckout && !isProcessing && (
                   <button
                     onClick={() => setIsCheckout(false)}
                     className="w-full text-center mt-4 text-[10px] uppercase tracking-widest text-stone-400 hover:text-stone-900 transition-colors"
@@ -622,18 +555,13 @@ const Navbar = () => {
       toast.success("Successfully logged out.");
       navigate("/");
     } catch (error) {
-      console.error(error);
       toast.error("Failed to log out.");
     }
   };
 
   return (
     <nav
-      className={`fixed w-full z-50 transition-all duration-500 ${
-        scrolled
-          ? "bg-white/90 backdrop-blur-md py-4 border-b border-stone-200 shadow-sm"
-          : "bg-transparent py-8"
-      }`}
+      className={`fixed w-full z-50 transition-all duration-500 ${scrolled ? "bg-white/90 backdrop-blur-md py-4 border-b border-stone-200 shadow-sm" : "bg-transparent py-8"}`}
     >
       <div className="max-w-7xl mx-auto px-6 md:px-12 flex justify-between items-center relative">
         <Link
@@ -695,7 +623,6 @@ const Navbar = () => {
             )}
           </div>
 
-          {/* Cart Icon */}
           <button
             onClick={() => setIsCartOpen(true)}
             className="relative text-stone-800 hover:text-[#D4AF37] transition-colors z-50"
@@ -723,7 +650,6 @@ const Navbar = () => {
           <button
             onClick={() => setIsOpen(!isOpen)}
             className="md:hidden text-stone-800 focus:outline-none focus:text-[#D4AF37] z-50 ml-4"
-            aria-label="Toggle Mobile Menu"
           >
             <svg
               className="w-6 h-6 transition-transform duration-300"
@@ -1165,16 +1091,13 @@ const Reservation = () => {
           },
           import.meta.env.VITE_EMAILJS_PUBLIC_KEY,
         );
-      } catch (emailError) {
-        console.error(emailError);
-      }
+      } catch (emailError) {}
 
       toast.success(
         `Confirmed! Table ${assignedTable.id} secured for ${formattedDate}.`,
       );
       navigate("/dashboard");
     } catch (error) {
-      console.error(error);
       toast.error("Failed to secure table. Please try again.");
     } finally {
       setIsBooking(false);
@@ -1552,7 +1475,6 @@ const Dashboard = () => {
 
     const fetchData = async () => {
       try {
-        // Fetch Reservation
         const resQuery = query(
           collection(db, "reservations"),
           where("userId", "==", currentUser.uid),
@@ -1574,7 +1496,6 @@ const Dashboard = () => {
         }
         setReservation(activeRes);
 
-        // Fetch Orders
         const ordQuery = query(
           collection(db, "orders"),
           where("userId", "==", currentUser.uid),
@@ -1585,7 +1506,6 @@ const Dashboard = () => {
           ordSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
         );
       } catch (error) {
-        console.error(error);
       } finally {
         setLoading(false);
       }
@@ -1613,7 +1533,6 @@ const Dashboard = () => {
           </p>
         </div>
 
-        {/* Reservations Section */}
         <div className="mb-16">
           <h3 className="text-xs tracking-[0.3em] uppercase text-[#D4AF37] mb-6 font-semibold border-b border-stone-200 pb-2">
             Active Reservation
@@ -1676,7 +1595,6 @@ const Dashboard = () => {
           )}
         </div>
 
-        {/* Orders Section */}
         <div>
           <h3 className="text-xs tracking-[0.3em] uppercase text-[#D4AF37] mb-6 font-semibold border-b border-stone-200 pb-2">
             Delivery Orders
@@ -2320,7 +2238,7 @@ const Concierge = () => {
                   {curator.name}
                 </h3>
                 <p className="text-stone-500 font-medium leading-relaxed tracking-[0.1em] text-sm md:text-base italic mb-10 border-l border-stone-200 pl-6">
-                  "{curator.quote}"
+                  &quot;{curator.quote}&quot;
                 </p>
                 <div className="text-[9px] tracking-[0.2em] uppercase text-stone-900 font-bold bg-stone-100 self-start px-4 py-2 border border-stone-200">
                   Signature:{" "}
