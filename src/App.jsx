@@ -70,6 +70,7 @@ const App = () => {
 
 const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
+  const [isOpen, setIsOpen] = useState(false); // State to toggle mobile panel
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -92,15 +93,22 @@ const Navbar = () => {
 
   return (
     <nav
-      className={`fixed w-full z-50 transition-all duration-500 ${scrolled ? "bg-white/90 backdrop-blur-md py-4 border-b border-stone-200 shadow-sm" : "bg-transparent py-8"}`}
+      className={`fixed w-full z-50 transition-all duration-500 ${
+        scrolled
+          ? "bg-white/90 backdrop-blur-md py-4 border-b border-stone-200 shadow-sm"
+          : "bg-transparent py-8"
+      }`}
     >
-      <div className="max-w-7xl mx-auto px-6 md:px-12 flex justify-between items-center">
+      <div className="max-w-7xl mx-auto px-6 md:px-12 flex justify-between items-center relative">
         <Link
           to="/"
-          className="text-2xl md:text-3xl font-serif tracking-[0.2em] text-stone-900 uppercase"
+          onClick={() => setIsOpen(false)}
+          className="text-2xl md:text-3xl font-serif tracking-[0.2em] text-stone-900 uppercase z-50"
         >
           The Restro-Cafe
         </Link>
+
+        {/* Desktop Navigation Links */}
         <div className="space-x-8 lg:space-x-12 text-xs uppercase tracking-[0.2em] font-medium hidden md:block">
           <Link
             to="/"
@@ -150,6 +158,109 @@ const Navbar = () => {
             </Link>
           )}
         </div>
+
+        {/* Hamburger Toggle Trigger for Mobile */}
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="md:hidden text-stone-800 focus:outline-none focus:text-gold z-50 p-2"
+          aria-label="Toggle Mobile Menu"
+        >
+          <svg
+            className="w-6 h-6 transition-transform duration-300"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            {isOpen ? (
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.5"
+                d="M6 18L18 6M6 6l12 12"
+              />
+            ) : (
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.5"
+                d="M4 6h16M4 12h16M4 18h16"
+              />
+            )}
+          </svg>
+        </button>
+
+        {/* Expandable Menu Panel for Mobile Screen */}
+        <AnimatePresence>
+          {isOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.35, ease: "easeInOut" }}
+              className="md:hidden bg-white/95 backdrop-blur-md border-b border-stone-200 overflow-hidden w-full absolute top-full left-0 shadow-lg"
+            >
+              <div className="flex flex-col space-y-6 px-8 py-8 text-stone-800 text-xs uppercase tracking-[0.25em] font-semibold">
+                <Link
+                  to="/"
+                  onClick={() => setIsOpen(false)}
+                  className="hover:text-gold transition-colors duration-300"
+                >
+                  Experience
+                </Link>
+                <Link
+                  to="/menu"
+                  onClick={() => setIsOpen(false)}
+                  className="hover:text-gold transition-colors duration-300"
+                >
+                  Dining
+                </Link>
+                <Link
+                  to="/reservation"
+                  onClick={() => setIsOpen(false)}
+                  className="hover:text-gold transition-colors duration-300"
+                >
+                  Reservations
+                </Link>
+                <Link
+                  to="/contact"
+                  onClick={() => setIsOpen(false)}
+                  className="hover:text-gold transition-colors duration-300"
+                >
+                  Contact
+                </Link>
+                {currentUser ? (
+                  <>
+                    <Link
+                      to="/dashboard"
+                      onClick={() => setIsOpen(false)}
+                      className="hover:text-gold transition-colors duration-300"
+                    >
+                      My Booking
+                    </Link>
+                    <button
+                      onClick={() => {
+                        handleLogout();
+                        setIsOpen(false);
+                      }}
+                      className="text-left hover:text-gold transition-colors duration-300 uppercase tracking-[0.25em]"
+                    >
+                      Logout
+                    </button>
+                  </>
+                ) : (
+                  <Link
+                    to="/auth"
+                    onClick={() => setIsOpen(false)}
+                    className="hover:text-gold transition-colors duration-300"
+                  >
+                    Member Access
+                  </Link>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </nav>
   );
@@ -1507,13 +1618,13 @@ const Home = () => {
               className="col-span-1 md:col-span-2 relative group overflow-hidden bg-stone-100"
             >
               <img
-                src="https://images.unsplash.com/photo-1578683010236-d716f9a3f461?q=80&w=2070&auto=format&fit=crop"
+                src="https://images.unsplash.com/photo-1560170847-d2d59c1e4b00?q=80&w=1335&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
                 alt="Grand Chandelier"
                 className="w-full h-[500px] object-cover group-hover:scale-105 transition-transform duration-1000"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-stone-900/60 to-transparent flex items-end p-8">
                 <p className="font-serif text-2xl tracking-widest uppercase text-white drop-shadow-md">
-                  The Grand Pavilion
+                  The Grand Enclosure
                 </p>
               </div>
             </motion.div>
@@ -1715,7 +1826,7 @@ const Contact = () => {
           </h3>
           <p className="text-stone-600 font-medium tracking-wider leading-relaxed mb-12">
             To ensure an intimate and flawless dining experience, prior
-            reservations are highly recommended. For private dining enclosures
+            reservations are highly recommended. For private dining Enclosures
             or bespoke event curation, kindly reach out to our concierge.
           </p>
           <div className="space-y-8 font-medium tracking-widest text-sm mb-12">
