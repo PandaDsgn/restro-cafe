@@ -60,6 +60,7 @@ const App = () => {
             <Route path="/contact" element={<Contact />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/concierge" element={<Concierge />} />
           </Routes>
         </main>
         <Footer />
@@ -70,7 +71,7 @@ const App = () => {
 
 const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
-  const [isOpen, setIsOpen] = useState(false); // State to toggle mobile panel
+  const [isOpen, setIsOpen] = useState(false);
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -86,7 +87,7 @@ const Navbar = () => {
       toast.success("Successfully logged out.");
       navigate("/");
     } catch (error) {
-      console.error("Failed to log out", error);
+      console.error(error);
       toast.error("Failed to log out.");
     }
   };
@@ -108,29 +109,28 @@ const Navbar = () => {
           The Restro-Cafe
         </Link>
 
-        {/* Desktop Navigation Links */}
         <div className="space-x-8 lg:space-x-12 text-xs uppercase tracking-[0.2em] font-medium hidden md:block">
           <Link
             to="/"
-            className="text-stone-800 hover:text-gold transition-colors duration-300"
+            className="text-stone-800 hover:text-[#D4AF37] transition-colors duration-300"
           >
             Experience
           </Link>
           <Link
             to="/menu"
-            className="text-stone-800 hover:text-gold transition-colors duration-300"
+            className="text-stone-800 hover:text-[#D4AF37] transition-colors duration-300"
           >
             Dining
           </Link>
           <Link
             to="/reservation"
-            className="text-stone-800 hover:text-gold transition-colors duration-300"
+            className="text-stone-800 hover:text-[#D4AF37] transition-colors duration-300"
           >
             Reservations
           </Link>
           <Link
             to="/contact"
-            className="text-stone-800 hover:text-gold transition-colors duration-300"
+            className="text-stone-800 hover:text-[#D4AF37] transition-colors duration-300"
           >
             Contact
           </Link>
@@ -138,13 +138,13 @@ const Navbar = () => {
             <span className="space-x-8">
               <Link
                 to="/dashboard"
-                className="text-stone-800 hover:text-gold transition-colors duration-300 border-b border-transparent hover:border-gold pb-1"
+                className="text-stone-800 hover:text-[#D4AF37] transition-colors duration-300 border-b border-transparent hover:border-[#D4AF37] pb-1"
               >
                 My Booking
               </Link>
               <button
                 onClick={handleLogout}
-                className="text-stone-800 hover:text-gold transition-colors duration-300 uppercase tracking-[0.2em]"
+                className="text-stone-800 hover:text-[#D4AF37] transition-colors duration-300 uppercase tracking-[0.2em]"
               >
                 Logout
               </button>
@@ -152,17 +152,16 @@ const Navbar = () => {
           ) : (
             <Link
               to="/auth"
-              className="text-stone-800 hover:text-gold transition-colors duration-300"
+              className="text-stone-800 hover:text-[#D4AF37] transition-colors duration-300"
             >
               Member Access
             </Link>
           )}
         </div>
 
-        {/* Hamburger Toggle Trigger for Mobile */}
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="md:hidden text-stone-800 focus:outline-none focus:text-gold z-50 p-2"
+          className="md:hidden text-stone-800 focus:outline-none focus:text-[#D4AF37] z-50 p-2"
           aria-label="Toggle Mobile Menu"
         >
           <svg
@@ -190,7 +189,6 @@ const Navbar = () => {
           </svg>
         </button>
 
-        {/* Expandable Menu Panel for Mobile Screen */}
         <AnimatePresence>
           {isOpen && (
             <motion.div
@@ -204,28 +202,28 @@ const Navbar = () => {
                 <Link
                   to="/"
                   onClick={() => setIsOpen(false)}
-                  className="hover:text-gold transition-colors duration-300"
+                  className="hover:text-[#D4AF37] transition-colors duration-300"
                 >
                   Experience
                 </Link>
                 <Link
                   to="/menu"
                   onClick={() => setIsOpen(false)}
-                  className="hover:text-gold transition-colors duration-300"
+                  className="hover:text-[#D4AF37] transition-colors duration-300"
                 >
                   Dining
                 </Link>
                 <Link
                   to="/reservation"
                   onClick={() => setIsOpen(false)}
-                  className="hover:text-gold transition-colors duration-300"
+                  className="hover:text-[#D4AF37] transition-colors duration-300"
                 >
                   Reservations
                 </Link>
                 <Link
                   to="/contact"
                   onClick={() => setIsOpen(false)}
-                  className="hover:text-gold transition-colors duration-300"
+                  className="hover:text-[#D4AF37] transition-colors duration-300"
                 >
                   Contact
                 </Link>
@@ -234,7 +232,7 @@ const Navbar = () => {
                     <Link
                       to="/dashboard"
                       onClick={() => setIsOpen(false)}
-                      className="hover:text-gold transition-colors duration-300"
+                      className="hover:text-[#D4AF37] transition-colors duration-300"
                     >
                       My Booking
                     </Link>
@@ -243,7 +241,7 @@ const Navbar = () => {
                         handleLogout();
                         setIsOpen(false);
                       }}
-                      className="text-left hover:text-gold transition-colors duration-300 uppercase tracking-[0.25em]"
+                      className="text-left hover:text-[#D4AF37] transition-colors duration-300 uppercase tracking-[0.25em]"
                     >
                       Logout
                     </button>
@@ -252,7 +250,7 @@ const Navbar = () => {
                   <Link
                     to="/auth"
                     onClick={() => setIsOpen(false)}
-                    className="hover:text-gold transition-colors duration-300"
+                    className="hover:text-[#D4AF37] transition-colors duration-300"
                   >
                     Member Access
                   </Link>
@@ -376,8 +374,8 @@ const Reservation = () => {
     return months;
   };
 
-  const hoursList = Array.from({ length: 12 }, (_, i) => String(i + 1));
-  const minutesList = Array.from({ length: 60 }, (_, i) =>
+  const hours = Array.from({ length: 12 }, (_, i) => String(i + 1));
+  const minutes = Array.from({ length: 60 }, (_, i) =>
     String(i).padStart(2, "0"),
   );
   const amPmOptions = ["AM", "PM"];
@@ -599,7 +597,9 @@ const Reservation = () => {
       }
 
       if (!assignedTable) {
-        toast.error("No tables available for that party size at this time.");
+        toast.error(
+          "No tables available for that size/time. Try another slot.",
+        );
         setIsBooking(false);
         return;
       }
@@ -634,7 +634,7 @@ const Reservation = () => {
           import.meta.env.VITE_EMAILJS_PUBLIC_KEY,
         );
       } catch (emailError) {
-        console.error("Email failed to send:", emailError);
+        console.error(emailError);
       }
 
       toast.success(
@@ -642,7 +642,7 @@ const Reservation = () => {
       );
       navigate("/dashboard");
     } catch (error) {
-      console.error("DATABASE ERROR:", error);
+      console.error(error);
       toast.error("Failed to secure table. Please try again.");
     } finally {
       setIsBooking(false);
@@ -680,7 +680,7 @@ const Reservation = () => {
           </h4>
 
           <form onSubmit={handleReservationSubmit} className="space-y-10">
-            <div className="flex flex-col">
+            <div className="flex flex-col relative pb-4">
               <label className="text-[10px] tracking-[0.2em] uppercase text-stone-500 mb-4 font-semibold">
                 Party Size
               </label>
@@ -700,6 +700,11 @@ const Reservation = () => {
                   </button>
                 ))}
               </div>
+              {guests === 10 && (
+                <p className="absolute bottom-0 left-0 text-[10px] text-[#D4AF37] tracking-widest uppercase">
+                  Assigned to the luxury Grand Enclosure
+                </p>
+              )}
             </div>
 
             <div className="flex flex-col">
@@ -805,7 +810,7 @@ const Reservation = () => {
                   </button>
 
                   {yearDropdownOpen && (
-                    <div className="absolute left-0 right-0 mt-1 max-h-[200px] overflow-y-auto bg-stone-900 text-white border border-stone-800 z-50 shadow-xl">
+                    <div className="absolute left-0 right-0 mt-1 max-h-[160px] overflow-y-auto bg-stone-900 text-white border border-stone-800 z-50 shadow-xl">
                       {years.map((y) => (
                         <button
                           key={y}
@@ -859,7 +864,7 @@ const Reservation = () => {
 
                     {hourDropdownOpen && (
                       <div className="absolute left-0 right-0 mt-1 max-h-[160px] overflow-y-auto bg-stone-900 text-white border border-stone-800 z-50 shadow-xl">
-                        {hoursList.map((h) => {
+                        {hours.map((h) => {
                           const disabled = isTimeSlotDisabled(
                             h,
                             selectedMinute || "00",
@@ -915,7 +920,7 @@ const Reservation = () => {
 
                     {minuteDropdownOpen && (
                       <div className="absolute left-0 right-0 mt-1 max-h-[200px] overflow-y-auto bg-stone-900 text-white border border-stone-800 z-50 shadow-xl">
-                        {minutesList.map((m) => {
+                        {minutes.map((m) => {
                           const disabled = isTimeSlotDisabled(
                             selectedHour || "12",
                             m,
@@ -1055,7 +1060,7 @@ const Dashboard = () => {
           setEditGuests(docData.data().guests.toString());
         }
       } catch (error) {
-        console.error("Error fetching reservation:", error);
+        console.error(error);
       } finally {
         setLoading(false);
       }
@@ -1099,7 +1104,7 @@ const Dashboard = () => {
             import.meta.env.VITE_EMAILJS_PUBLIC_KEY,
           );
         } catch (emailError) {
-          console.error("Cancellation email failed to send:", emailError);
+          console.error(emailError);
         }
 
         toast.success("Reservation cancelled successfully.");
@@ -1234,7 +1239,7 @@ const Dashboard = () => {
           import.meta.env.VITE_EMAILJS_PUBLIC_KEY,
         );
       } catch (emailError) {
-        console.error("Update email failed to send:", emailError);
+        console.error(emailError);
       }
 
       setReservation({ ...reservation, ...updatedData });
@@ -1277,7 +1282,7 @@ const Dashboard = () => {
             </p>
             <Link
               to="/reservation"
-              className="bg-stone-900 text-white px-10 py-4 uppercase tracking-[0.2em] text-xs hover:bg-gold transition-colors font-medium"
+              className="bg-stone-900 text-white px-10 py-4 uppercase tracking-[0.2em] text-xs hover:bg-[#D4AF37] transition-colors font-medium"
             >
               Secure a Table
             </Link>
@@ -1325,7 +1330,9 @@ const Dashboard = () => {
                   <p className="font-serif text-lg text-stone-900">
                     Table {reservation.tableId}
                   </p>
-                  <p className="text-xs text-gold mt-1">{reservation.area}</p>
+                  <p className="text-xs text-[#D4AF37] mt-1">
+                    {reservation.area}
+                  </p>
                 </div>
               </div>
             ) : (
@@ -1342,7 +1349,7 @@ const Dashboard = () => {
                     required
                     value={editDate}
                     onChange={(e) => setEditDate(e.target.value)}
-                    className="bg-transparent border-b border-stone-300 py-2 focus:outline-none focus:border-gold"
+                    className="bg-transparent border-b border-stone-300 py-2 focus:outline-none focus:border-[#D4AF37]"
                   />
                 </div>
                 <div className="flex flex-col">
@@ -1354,7 +1361,7 @@ const Dashboard = () => {
                     required
                     value={editTime}
                     onChange={(e) => setEditTime(e.target.value)}
-                    className="bg-transparent border-b border-stone-300 py-2 focus:outline-none focus:border-gold"
+                    className="bg-transparent border-b border-stone-300 py-2 focus:outline-none focus:border-[#D4AF37]"
                   />
                 </div>
                 <div className="flex flex-col">
@@ -1364,7 +1371,7 @@ const Dashboard = () => {
                   <select
                     value={editGuests}
                     onChange={(e) => setEditGuests(e.target.value)}
-                    className="bg-transparent border-b border-stone-300 py-2 focus:outline-none focus:border-gold appearance-none"
+                    className="bg-transparent border-b border-stone-300 py-2 focus:outline-none focus:border-[#D4AF37] appearance-none"
                   >
                     <option value="1">1 Person</option>
                     <option value="2">2 People</option>
@@ -1385,7 +1392,7 @@ const Dashboard = () => {
                   <button
                     type="submit"
                     disabled={isProcessing}
-                    className="bg-gold text-white px-8 py-2 uppercase tracking-[0.2em] text-xs font-medium hover:bg-stone-900 transition-colors"
+                    className="bg-[#D4AF37] text-white px-8 py-2 uppercase tracking-[0.2em] text-xs font-medium hover:bg-stone-900 transition-colors"
                   >
                     {isProcessing ? "Checking..." : "Confirm Changes"}
                   </button>
@@ -1406,7 +1413,7 @@ const Dashboard = () => {
               <div className="flex justify-end space-x-6 border-t border-stone-100 pt-6">
                 <button
                   onClick={() => setIsEditing(true)}
-                  className="text-xs uppercase tracking-[0.2em] text-stone-500 hover:text-gold font-medium transition-colors"
+                  className="text-xs uppercase tracking-[0.2em] text-stone-500 hover:text-[#D4AF37] font-medium transition-colors"
                 >
                   Modify Booking
                 </button>
@@ -1549,7 +1556,7 @@ const Home = () => {
             </p>
             <Link
               to="/menu"
-              className="inline-block border border-gold text-gold px-10 py-4 uppercase tracking-[0.2em] text-xs hover:bg-gold hover:text-white transition-all duration-500 font-medium"
+              className="inline-block border border-[#D4AF37] text-[#D4AF37] px-10 py-4 uppercase tracking-[0.2em] text-xs hover:bg-[#D4AF37] hover:text-white transition-all duration-500 font-medium"
             >
               Discover the Menu
             </Link>
@@ -1602,7 +1609,7 @@ const Home = () => {
       <section className="py-24 bg-[#FBFBF9]">
         <div className="max-w-7xl mx-auto px-6 md:px-12">
           <div className="text-center mb-16">
-            <h4 className="text-xs tracking-[0.3em] uppercase text-gold mb-4 font-medium">
+            <h4 className="text-xs tracking-[0.3em] uppercase text-[#D4AF37] mb-4 font-medium">
               The Ambience
             </h4>
             <h3 className="text-3xl font-serif tracking-widest uppercase text-stone-900">
@@ -1641,7 +1648,7 @@ const Home = () => {
                 className="w-full h-[500px] object-cover group-hover:scale-105 transition-transform duration-1000"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-stone-900/60 to-transparent flex items-end p-8">
-                <p className="font-serif text-xl tracking-widest uppercase text-gold drop-shadow-md">
+                <p className="font-serif text-xl tracking-widest uppercase text-[#D4AF37] drop-shadow-md">
                   Master Curators
                 </p>
               </div>
@@ -1658,7 +1665,7 @@ const Home = () => {
             viewport={{ once: true }}
             transition={{ duration: 0.8 }}
           >
-            <h4 className="text-xs tracking-[0.3em] uppercase text-gold mb-4 font-medium">
+            <h4 className="text-xs tracking-[0.3em] uppercase text-[#D4AF37] mb-4 font-medium">
               Reservations
             </h4>
             <h3 className="text-3xl font-serif tracking-widest uppercase text-stone-900 mb-6">
@@ -1671,7 +1678,7 @@ const Home = () => {
             </p>
             <Link
               to="/reservation"
-              className="inline-block bg-stone-900 text-white px-12 py-5 uppercase tracking-[0.2em] text-xs hover:bg-gold transition-all duration-500 font-medium"
+              className="inline-block bg-stone-900 text-white px-12 py-5 uppercase tracking-[0.2em] text-xs hover:bg-[#D4AF37] transition-all duration-500 font-medium"
             >
               Make a Reservation
             </Link>
@@ -1726,11 +1733,11 @@ const Menu = () => {
       <div className="max-w-4xl mx-auto px-6">
         <div className="text-center mb-20">
           <div className="flex items-center justify-center space-x-4 mb-6">
-            <div className="w-8 h-px bg-gold"></div>
-            <span className="text-xs tracking-[0.3em] uppercase text-gold font-medium">
+            <div className="w-8 h-px bg-[#D4AF37]"></div>
+            <span className="text-xs tracking-[0.3em] uppercase text-[#D4AF37] font-medium">
               Epicurean Mastery
             </span>
-            <div className="w-8 h-px bg-gold"></div>
+            <div className="w-8 h-px bg-[#D4AF37]"></div>
           </div>
           <h2 className="text-4xl md:text-5xl font-serif tracking-widest uppercase text-stone-900 mb-6">
             The Royal Menu
@@ -1742,7 +1749,7 @@ const Menu = () => {
 
         {categories.map((category, idx) => (
           <div key={idx} className="mb-20">
-            <h3 className="text-2xl font-serif tracking-widest text-gold text-center uppercase mb-12 border-b border-stone-200 pb-4">
+            <h3 className="text-2xl font-serif tracking-widest text-[#D4AF37] text-center uppercase mb-12 border-b border-stone-200 pb-4">
               {category.title}
             </h3>
             <div className="space-y-10">
@@ -1760,7 +1767,7 @@ const Menu = () => {
                     </p>
                   </div>
                   <div className="mt-4 md:mt-0 flex-shrink-0 z-10 bg-[#FBFBF9] pl-4">
-                    <span className="text-lg font-serif text-gold tracking-widest">
+                    <span className="text-lg font-serif text-[#D4AF37] tracking-widest">
                       {item.price}
                     </span>
                   </div>
@@ -1807,7 +1814,7 @@ const Contact = () => {
       setType("General Reservation");
       setMessage("");
     } catch (error) {
-      console.error("Error sending inquiry:", error);
+      console.error(error);
       toast.error("Failed to send inquiry. Please try again.");
     } finally {
       setIsSubmitting(false);
@@ -1818,7 +1825,7 @@ const Contact = () => {
     <div className="animate-fade-in pt-40 pb-24 bg-white min-h-screen">
       <div className="max-w-7xl mx-auto px-6 flex flex-col lg:flex-row gap-16">
         <div className="lg:w-1/2">
-          <h2 className="text-xs tracking-[0.3em] uppercase text-gold mb-4 font-medium">
+          <h2 className="text-xs tracking-[0.3em] uppercase text-[#D4AF37] mb-4 font-medium">
             Connect With Us
           </h2>
           <h3 className="text-4xl md:text-5xl font-serif tracking-widest uppercase text-stone-900 mb-8 leading-tight">
@@ -1826,12 +1833,12 @@ const Contact = () => {
           </h3>
           <p className="text-stone-600 font-medium tracking-wider leading-relaxed mb-12">
             To ensure an intimate and flawless dining experience, prior
-            reservations are highly recommended. For private dining Enclosures
+            reservations are highly recommended. For private dining enclosures
             or bespoke event curation, kindly reach out to our concierge.
           </p>
           <div className="space-y-8 font-medium tracking-widest text-sm mb-12">
             <div>
-              <p className="text-gold uppercase mb-1">The Address</p>
+              <p className="text-[#D4AF37] uppercase mb-1">The Address</p>
               <p className="text-stone-800">
                 1 JBS Haldane Avenue, Tangra
                 <br />
@@ -1839,11 +1846,11 @@ const Contact = () => {
               </p>
             </div>
             <div>
-              <p className="text-gold uppercase mb-1">Direct Line</p>
+              <p className="text-[#D4AF37] uppercase mb-1">Direct Line</p>
               <p className="text-stone-800">+91 33 4446 4646</p>
             </div>
             <div>
-              <p className="text-gold uppercase mb-1">Email</p>
+              <p className="text-[#D4AF37] uppercase mb-1">Email</p>
               <p className="text-stone-800">
                 reservations@therestrocafe.luxury
               </p>
@@ -1865,7 +1872,7 @@ const Contact = () => {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                className="bg-transparent border-b border-stone-300 py-2 focus:outline-none focus:border-gold transition-colors font-medium text-stone-800"
+                className="bg-transparent border-b border-stone-300 py-2 focus:outline-none focus:border-[#D4AF37] transition-colors font-medium text-stone-800"
                 placeholder="Enter your name"
               />
             </div>
@@ -1878,7 +1885,7 @@ const Contact = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="bg-transparent border-b border-stone-300 py-2 focus:outline-none focus:border-gold transition-colors font-medium text-stone-800"
+                className="bg-transparent border-b border-stone-300 py-2 focus:outline-none focus:border-[#D4AF37] transition-colors font-medium text-stone-800"
                 placeholder="Enter your email"
               />
             </div>
@@ -1889,7 +1896,7 @@ const Contact = () => {
               <select
                 value={type}
                 onChange={(e) => setType(e.target.value)}
-                className="bg-transparent border-b border-stone-300 py-2 focus:outline-none focus:border-gold transition-colors font-medium text-stone-800 appearance-none"
+                className="bg-transparent border-b border-stone-300 py-2 focus:outline-none focus:border-[#D4AF37] transition-colors font-medium text-stone-800 appearance-none"
               >
                 <option value="General Reservation">General Reservation</option>
                 <option value="Private Dining Event">
@@ -1908,18 +1915,128 @@ const Contact = () => {
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 required
-                className="bg-transparent border-b border-stone-300 py-2 focus:outline-none focus:border-gold transition-colors font-medium text-stone-800 resize-none"
+                className="bg-transparent border-b border-stone-300 py-2 focus:outline-none focus:border-[#D4AF37] transition-colors font-medium text-stone-800 resize-none"
                 placeholder="How may we assist you?"
               ></textarea>
             </div>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full bg-stone-900 text-white px-8 py-4 uppercase tracking-[0.2em] text-xs hover:bg-gold transition-all duration-500 font-medium mt-4 disabled:opacity-50"
+              className="w-full bg-stone-900 text-white px-8 py-4 uppercase tracking-[0.2em] text-xs hover:bg-[#D4AF37] transition-all duration-500 font-medium mt-4 disabled:opacity-50"
             >
               {isSubmitting ? "Sending..." : "Submit Inquiry"}
             </button>
           </form>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const Concierge = () => {
+  const curators = [
+    {
+      id: 1,
+      name: "Alistair Sterling",
+      role: "Executive Head Chef",
+      quote:
+        "Perfection is not an act; it is a relentless, unforgiving habit. Every plate that leaves this kitchen carries a piece of my soul and centuries of culinary discipline.",
+      signature: "The Imperial Tasting Menu",
+      image:
+        "https://images.unsplash.com/photo-1727975741756-9c8591e5aac6?q=80&w=1977&auto=format&fit=crop",
+    },
+    {
+      id: 2,
+      name: "Isabella Rossi",
+      role: "Master Patissier",
+      quote:
+        "Sugar is merely the medium. My true ingredients are memory, structure, and fleeting moments of pure, unadulterated joy. A dessert should be as transient as a dream.",
+      signature: "Saffron Pistachio Kulfi",
+      image:
+        "https://images.unsplash.com/photo-1731576089270-9e806089a40f?q=80&w=1977&auto=format&fit=crop",
+    },
+    {
+      id: 3,
+      name: "Vikram Aditya",
+      role: "Royal Kitchen Historian",
+      quote:
+        "I do not invent recipes; I resurrect them. The spices we use were once traded for empires. Cooking here is an act of historical preservation, executed over charcoal and fire.",
+      signature: "Sikandari Raan Reserve",
+      image:
+        "https://images.unsplash.com/photo-1577219491135-ce391730fb2c?q=80&w=1977&auto=format&fit=crop",
+    },
+    {
+      id: 4,
+      name: "Julian Moreau",
+      role: "Head Sommelier",
+      quote:
+        "A bottle of wine is a time capsule. My duty is to unlock the exact year, terroir, and weather that perfectly harmonizes with the flame-kissed ingredients on your plate.",
+      signature: "Bordeaux Heritage Pairing",
+      image:
+        "https://images.unsplash.com/photo-1669707569583-8d4c8051130a?q=80&w=1977&auto=format&fit=crop",
+    },
+    {
+      id: 5,
+      name: "Daisuke Tanaka",
+      role: "Asian Fusion Master",
+      quote:
+        "The knife must move with intention, never hesitation. Respect the ocean, respect the ingredient, and the dish will ultimately speak for itself.",
+      signature: "Omakase Reserve",
+      image:
+        "https://images.unsplash.com/photo-1583394293214-28ded15ee548?q=80&w=1977&auto=format&fit=crop",
+    },
+  ];
+
+  return (
+    <div className="animate-fade-in pt-40 pb-24 bg-[#FBFBF9] min-h-screen">
+      <div className="max-w-7xl mx-auto px-6 md:px-12">
+        <div className="text-center mb-24 md:mb-32">
+          <h4 className="text-xs tracking-[0.3em] uppercase text-[#D4AF37] mb-4 font-semibold">
+            The Architects of Taste
+          </h4>
+          <h2 className="text-4xl md:text-6xl font-serif tracking-widest uppercase text-stone-900 mb-6">
+            Our Concierge
+          </h2>
+          <div className="w-16 h-px bg-stone-300 mx-auto"></div>
+        </div>
+
+        <div className="flex flex-col">
+          {curators.map((curator, index) => (
+            <div
+              key={curator.id}
+              className={`flex flex-col lg:flex-row items-center gap-0 lg:gap-16 mb-24 lg:mb-32 ${
+                index % 2 !== 0 ? "lg:flex-row-reverse" : ""
+              }`}
+            >
+              <div className="w-full lg:w-1/2 relative h-[400px] lg:h-[600px] overflow-hidden group bg-stone-900">
+                <img
+                  src={curator.image}
+                  alt={curator.name}
+                  className="w-full h-full object-cover grayscale opacity-90 group-hover:grayscale-0 group-hover:scale-105 group-hover:opacity-100 transition-all duration-[1500ms]"
+                />
+                <div className="absolute inset-0 border border-white/20 m-6 pointer-events-none transition-all duration-[1500ms] group-hover:m-4"></div>
+              </div>
+
+              <div className="w-full lg:w-1/2 flex flex-col justify-center p-8 lg:p-0">
+                <div className="w-12 h-px bg-[#D4AF37] mb-8"></div>
+                <h4 className="text-[10px] tracking-[0.3em] uppercase text-[#D4AF37] mb-4 font-bold">
+                  {curator.role}
+                </h4>
+                <h3 className="text-3xl md:text-5xl font-serif text-stone-900 mb-8 uppercase tracking-widest leading-tight">
+                  {curator.name}
+                </h3>
+                <p className="text-stone-500 font-medium leading-relaxed tracking-[0.1em] text-sm md:text-base italic mb-10 border-l border-stone-200 pl-6">
+                  &quot;{curator.quote}&quot;
+                </p>
+                <div className="text-[9px] tracking-[0.2em] uppercase text-stone-900 font-bold bg-stone-100 self-start px-4 py-2 border border-stone-200">
+                  Signature:{" "}
+                  <span className="text-stone-500 ml-2">
+                    {curator.signature}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -1935,24 +2052,24 @@ const Footer = () => {
       <div className="flex justify-center items-center space-x-6 mb-8">
         <a
           href="#"
-          className="text-stone-500 hover:text-gold transition-colors tracking-widest text-xs uppercase font-medium"
+          className="text-stone-500 hover:text-[#D4AF37] transition-colors tracking-widest text-xs uppercase font-medium"
         >
           Instagram
         </a>
         <span className="text-stone-300">|</span>
         <a
           href="#"
-          className="text-stone-500 hover:text-gold transition-colors tracking-widest text-xs uppercase font-medium"
+          className="text-stone-500 hover:text-[#D4AF37] transition-colors tracking-widest text-xs uppercase font-medium"
         >
           Facebook
         </a>
         <span className="text-stone-300">|</span>
-        <a
-          href="#"
-          className="text-stone-500 hover:text-gold transition-colors tracking-widest text-xs uppercase font-medium"
+        <Link
+          to="/concierge"
+          className="text-stone-500 hover:text-[#D4AF37] transition-colors tracking-widest text-xs uppercase font-medium"
         >
           Concierge
-        </a>
+        </Link>
       </div>
       <p className="text-[10px] tracking-[0.2em] text-stone-400 uppercase font-medium">
         © 2026 The Restro-Cafe Luxury Collection. All Rights Reserved.
