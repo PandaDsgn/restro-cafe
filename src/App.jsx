@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, createContext, useContext } from "react";
 import {
   HashRouter,
   Routes,
@@ -22,8 +22,80 @@ import {
   doc,
   deleteDoc,
   updateDoc,
+  orderBy,
 } from "firebase/firestore";
 import emailjs from "@emailjs/browser";
+
+// --- Utility Functions ---
+const parsePrice = (priceStr) => parseInt(priceStr.replace(/[^0-9]/g, ""), 10);
+const formatPrice = (num) => `₹ ${num.toLocaleString("en-IN")}`;
+
+// --- Cart Context ---
+const CartContext = createContext();
+const useCart = () => useContext(CartContext);
+
+const CartProvider = ({ children }) => {
+  const [cart, setCart] = useState([]);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+
+  const addToCart = (item) => {
+    setCart((prev) => {
+      const existing = prev.find((i) => i.name === item.name);
+      if (existing) {
+        return prev.map((i) =>
+          i.name === item.name ? { ...i, quantity: i.quantity + 1 } : i,
+        );
+      }
+      return [
+        ...prev,
+        { ...item, quantity: 1, numericPrice: parsePrice(item.price) },
+      ];
+    });
+    toast.success(`${item.name} added to order.`);
+  };
+
+  const removeFromCart = (name) => {
+    setCart((prev) => prev.filter((i) => i.name !== name));
+  };
+
+  const updateQuantity = (name, amount) => {
+    setCart((prev) =>
+      prev.map((i) => {
+        if (i.name === name) {
+          const newQty = i.quantity + amount;
+          return newQty > 0 ? { ...i, quantity: newQty } : i;
+        }
+        return i;
+      }),
+    );
+  };
+
+  const clearCart = () => setCart([]);
+
+  const cartTotal = cart.reduce(
+    (total, item) => total + item.numericPrice * item.quantity,
+    0,
+  );
+  const cartCount = cart.reduce((count, item) => count + item.quantity, 0);
+
+  return (
+    <CartContext.Provider
+      value={{
+        cart,
+        addToCart,
+        removeFromCart,
+        updateQuantity,
+        clearCart,
+        cartTotal,
+        cartCount,
+        isCartOpen,
+        setIsCartOpen,
+      }}
+    >
+      {children}
+    </CartContext.Provider>
+  );
+};
 
 const ScrollToTop = () => {
   const { pathname } = useLocation();
@@ -33,39 +105,501 @@ const ScrollToTop = () => {
   return null;
 };
 
+// --- Cart Drawer Component ---
+// --- Cart Drawer Component ---
+const CartDrawer = () => {
+  const {
+    cart,
+    removeFromCart,
+    updateQuantity,
+    clearCart,
+    cartTotal,
+    isCartOpen,
+    setIsCartOpen,
+  } = useCart();
+  const { currentUser } = useAuth();
+  const navigate = useNavigate();
+
+  const [isCheckout, setIsCheckout] = useState(false);
+  const [address, setAddress] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("UPI");
+
+  // New States for our Mock Gateway
+  const [showMockGateway, setShowMockGateway] = useState(false);
+  const [gatewayStatus, setGatewayStatus] = useState(
+    "Initializing Secure Connection...",
+  );
+
+  const handleCheckout = (e) => {
+    e.preventDefault();
+    if (!currentUser) {
+      toast.error("Please log in to place an order.");
+      setIsCartOpen(false);
+      navigate("/auth");
+      return;
+    }
+
+    if (!address.trim()) {
+      toast.error("Please provide a delivery address.");
+      return;
+    }
+
+    // Launch the mock gateway instead of a real backend
+    setShowMockGateway(true);
+
+    // Simulate the steps of a real payment processor
+    setTimeout(
+      () => setGatewayStatus(`Awaiting ${paymentMethod} Authorization...`),
+      1500,
+    );
+    setTimeout(
+      () => setGatewayStatus("Verifying Transaction Signature..."),
+      3000,
+    );
+    setTimeout(() => setGatewayStatus("Payment Successful!"), 4500);
+
+    // Finalize order after simulation
+    setTimeout(async () => {
+      try {
+        await addDoc(collection(db, "orders"), {
+          userId: currentUser.uid,
+          email: currentUser.email,
+          items: cart,
+          total: cartTotal,
+          address: address,
+          paymentMethod: paymentMethod,
+          status: "Preparing",
+          createdAt: serverTimestamp(),
+        });
+
+        toast.success("Order confirmed and sent to kitchen.");
+        clearCart();
+        setIsCheckout(false);
+        setIsCartOpen(false);
+        setShowMockGateway(false);
+        setGatewayStatus("Initializing Secure Connection...");
+        navigate("/dashboard");
+      } catch (error) {
+        console.error("Order error:", error);
+        toast.error("Database connection failed. Please try again.");
+        setShowMockGateway(false);
+      }
+    }, 5500);
+  };
+
+  return (
+    <AnimatePresence>
+      {/* MOCK PAYMENT GATEWAY OVERLAY */}
+      {showMockGateway && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-stone-900/80 backdrop-blur-md z-[100] flex items-center justify-center"
+        >
+          <motion.div
+            initial={{ scale: 0.9, y: 20 }}
+            animate={{ scale: 1, y: 0 }}
+            className="bg-white p-8 md:p-12 max-w-md w-full mx-4 shadow-2xl flex flex-col items-center text-center border-t-4 border-[#D4AF37]"
+          >
+            {gatewayStatus === "Payment Successful!" ? (
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-6 text-green-600"
+              >
+                <svg
+                  className="w-8 h-8"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
+              </motion.div>
+            ) : (
+              <div className="relative w-16 h-16 mb-6">
+                <svg
+                  className="animate-spin w-full h-full text-stone-200"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                    fill="none"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="#D4AF37"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-[#D4AF37] text-[10px] font-bold">
+                    ₹
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <h3 className="font-serif text-2xl text-stone-900 mb-2">
+              Processing Payment
+            </h3>
+            <p className="text-xs font-medium text-stone-500 tracking-widest uppercase mb-8">
+              {gatewayStatus}
+            </p>
+
+            <div className="w-full bg-stone-50 p-4 border border-stone-200 text-left">
+              <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1">
+                Amount to Pay
+              </p>
+              <p className="font-serif text-xl text-stone-900">
+                {formatPrice(cartTotal)}
+              </p>
+              <p className="text-[10px] text-stone-400 uppercase tracking-widest mt-4 mb-1">
+                Method
+              </p>
+              <p className="font-medium text-stone-800 text-sm uppercase">
+                {paymentMethod}
+              </p>
+            </div>
+
+            <p className="text-[9px] text-stone-400 mt-6 uppercase tracking-widest flex items-center gap-2">
+              <svg
+                className="w-3 h-3"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                />
+              </svg>
+              Secured by Restro-Cafe Mock Gateway
+            </p>
+          </motion.div>
+        </motion.div>
+      )}
+
+      {isCartOpen && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsCartOpen(false)}
+            className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-[60]"
+          />
+          <motion.div
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "tween", duration: 0.4 }}
+            className="fixed top-0 right-0 h-full w-full md:w-[450px] bg-[#FBFBF9] z-[70] shadow-2xl flex flex-col border-l border-stone-200"
+          >
+            <div className="p-6 border-b border-stone-200 flex justify-between items-center bg-white">
+              <h2 className="font-serif tracking-widest text-xl uppercase text-stone-900">
+                {isCheckout ? "Secure Checkout" : "Your Order"}
+              </h2>
+              <button
+                onClick={() => setIsCartOpen(false)}
+                className="text-stone-400 hover:text-[#D4AF37] transition-colors"
+              >
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.5"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <div className="flex-grow overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-stone-200">
+              {cart.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center opacity-50">
+                  <svg
+                    className="w-16 h-16 mb-4 text-[#D4AF37]"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="1"
+                      d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
+                    />
+                  </svg>
+                  <p className="text-xs uppercase tracking-widest font-semibold">
+                    Your cart is empty.
+                  </p>
+                </div>
+              ) : isCheckout ? (
+                <form
+                  id="checkout-form"
+                  onSubmit={handleCheckout}
+                  className="space-y-8 animate-fade-in"
+                >
+                  <div className="bg-white p-4 border border-stone-100 shadow-sm">
+                    <h4 className="text-[10px] uppercase tracking-[0.2em] text-[#D4AF37] mb-3 font-bold">
+                      Order Summary
+                    </h4>
+                    {cart.map((item, i) => (
+                      <div
+                        key={i}
+                        className="flex justify-between text-xs font-medium text-stone-600 mb-2"
+                      >
+                        <span>
+                          {item.quantity}x {item.name}
+                        </span>
+                        <span>
+                          {formatPrice(item.numericPrice * item.quantity)}
+                        </span>
+                      </div>
+                    ))}
+                    <div className="border-t border-stone-100 mt-3 pt-3 flex justify-between font-serif text-lg text-stone-900">
+                      <span>Total</span>
+                      <span>{formatPrice(cartTotal)}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col">
+                    <label className="text-[10px] tracking-[0.2em] uppercase text-stone-500 mb-2 font-semibold">
+                      Delivery Address
+                    </label>
+                    <textarea
+                      required
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                      rows="3"
+                      className="bg-transparent border border-stone-300 p-3 focus:outline-none focus:border-[#D4AF37] transition-colors font-medium text-stone-800 text-xs resize-none"
+                      placeholder="Enter complete address..."
+                    />
+                  </div>
+
+                  <div className="flex flex-col space-y-3">
+                    <label className="text-[10px] tracking-[0.2em] uppercase text-stone-500 mb-1 font-semibold">
+                      Payment Method
+                    </label>
+                    {["UPI", "Credit/Debit Card", "Net Banking"].map(
+                      (method) => (
+                        <label
+                          key={method}
+                          className={`flex items-center p-4 border cursor-pointer transition-all ${paymentMethod === method ? "border-[#D4AF37] bg-[#D4AF37]/5" : "border-stone-200 bg-white"}`}
+                        >
+                          <input
+                            type="radio"
+                            name="payment"
+                            value={method}
+                            checked={paymentMethod === method}
+                            onChange={() => setPaymentMethod(method)}
+                            className="mr-4 accent-[#D4AF37]"
+                          />
+                          <span className="text-xs uppercase tracking-widest font-semibold text-stone-800">
+                            {method}
+                          </span>
+                        </label>
+                      ),
+                    )}
+                  </div>
+
+                  {paymentMethod === "UPI" && (
+                    <input
+                      type="text"
+                      placeholder="Enter UPI ID (e.g. user@upi)"
+                      required
+                      className="w-full bg-white border border-stone-300 p-3 focus:outline-none focus:border-[#D4AF37] transition-colors font-medium text-stone-800 text-xs"
+                    />
+                  )}
+                  {paymentMethod === "Credit/Debit Card" && (
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        placeholder="Card Number"
+                        required
+                        maxLength="16"
+                        className="w-full bg-white border border-stone-300 p-3 focus:outline-none focus:border-[#D4AF37] text-xs"
+                      />
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="MM/YY"
+                          required
+                          maxLength="5"
+                          className="w-1/2 bg-white border border-stone-300 p-3 focus:outline-none focus:border-[#D4AF37] text-xs"
+                        />
+                        <input
+                          type="text"
+                          placeholder="CVV"
+                          required
+                          maxLength="3"
+                          className="w-1/2 bg-white border border-stone-300 p-3 focus:outline-none focus:border-[#D4AF37] text-xs"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </form>
+              ) : (
+                <div className="space-y-6">
+                  {cart.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="flex flex-col bg-white p-4 border border-stone-100 shadow-sm relative"
+                    >
+                      <button
+                        onClick={() => removeFromCart(item.name)}
+                        className="absolute top-2 right-2 text-stone-300 hover:text-red-500 transition-colors"
+                      >
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M6 18L18 6M6 6l12 12"
+                          />
+                        </svg>
+                      </button>
+                      <h4 className="font-serif text-stone-900 tracking-wider mb-1 pr-6">
+                        {item.name}
+                      </h4>
+                      <p className="text-xs text-[#D4AF37] font-semibold mb-4">
+                        {item.price}
+                      </p>
+                      <div className="flex items-center space-x-4">
+                        <div className="flex items-center border border-stone-200">
+                          <button
+                            onClick={() => updateQuantity(item.name, -1)}
+                            className="px-3 py-1 text-stone-500 hover:bg-stone-100 transition-colors"
+                          >
+                            -
+                          </button>
+                          <span className="px-3 py-1 text-xs font-semibold">
+                            {item.quantity}
+                          </span>
+                          <button
+                            onClick={() => updateQuantity(item.name, 1)}
+                            className="px-3 py-1 text-stone-500 hover:bg-stone-100 transition-colors"
+                          >
+                            +
+                          </button>
+                        </div>
+                        <p className="text-xs font-semibold text-stone-600">
+                          Total:{" "}
+                          {formatPrice(item.numericPrice * item.quantity)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {cart.length > 0 && (
+              <div className="p-6 bg-white border-t border-stone-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10">
+                {!isCheckout && (
+                  <div className="flex justify-between items-center mb-6">
+                    <span className="text-xs uppercase tracking-widest font-semibold text-stone-500">
+                      Subtotal
+                    </span>
+                    <span className="text-xl font-serif text-stone-900">
+                      {formatPrice(cartTotal)}
+                    </span>
+                  </div>
+                )}
+
+                {isCheckout ? (
+                  <button
+                    type="submit"
+                    form="checkout-form"
+                    className="w-full bg-stone-900 text-white py-4 uppercase tracking-[0.2em] text-xs hover:bg-[#D4AF37] transition-colors font-medium flex justify-center items-center"
+                  >
+                    Pay {formatPrice(cartTotal)}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setIsCheckout(true)}
+                    className="w-full bg-stone-900 text-white py-4 uppercase tracking-[0.2em] text-xs hover:bg-[#D4AF37] transition-colors font-medium"
+                  >
+                    Proceed to Checkout
+                  </button>
+                )}
+                {isCheckout && (
+                  <button
+                    onClick={() => setIsCheckout(false)}
+                    className="w-full text-center mt-4 text-[10px] uppercase tracking-widest text-stone-400 hover:text-stone-900 transition-colors"
+                  >
+                    ← Back to Cart
+                  </button>
+                )}
+              </div>
+            )}
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+};
+
 const App = () => {
   return (
-    <HashRouter>
-      <ScrollToTop />
-      <div className="min-h-screen bg-[#FBFBF9] text-stone-900 font-sans selection:bg-[#D4AF37] selection:text-white flex flex-col">
-        <Toaster
-          position="top-center"
-          toastOptions={{
-            duration: 3000,
-            style: {
-              background: "#1c1917",
-              color: "#fff",
-              fontSize: "14px",
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-            },
-          }}
-        />
-        <Navbar />
-        <main className="flex-grow">
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/menu" element={<Menu />} />
-            <Route path="/reservation" element={<Reservation />} />
-            <Route path="/contact" element={<Contact />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/concierge" element={<Concierge />} />
-          </Routes>
-        </main>
-        <Footer />
-      </div>
-    </HashRouter>
+    <CartProvider>
+      <HashRouter>
+        <ScrollToTop />
+        <div className="min-h-screen bg-[#FBFBF9] text-stone-900 font-sans selection:bg-[#D4AF37] selection:text-white flex flex-col">
+          <Toaster
+            position="top-center"
+            toastOptions={{
+              duration: 3000,
+              style: {
+                background: "#1c1917",
+                color: "#fff",
+                fontSize: "14px",
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+              },
+            }}
+          />
+          <Navbar />
+          <CartDrawer />
+          <main className="flex-grow">
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/menu" element={<Menu />} />
+              <Route path="/reservation" element={<Reservation />} />
+              <Route path="/contact" element={<Contact />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/concierge" element={<Concierge />} />
+            </Routes>
+          </main>
+          <Footer />
+        </div>
+      </HashRouter>
+    </CartProvider>
   );
 };
 
@@ -73,6 +607,7 @@ const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const { currentUser, logout } = useAuth();
+  const { cartCount, setIsCartOpen } = useCart();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -109,85 +644,111 @@ const Navbar = () => {
           The Restro-Cafe
         </Link>
 
-        <div className="space-x-8 lg:space-x-12 text-xs uppercase tracking-[0.2em] font-medium hidden md:block">
-          <Link
-            to="/"
-            className="text-stone-800 hover:text-[#D4AF37] transition-colors duration-300"
-          >
-            Experience
-          </Link>
-          <Link
-            to="/menu"
-            className="text-stone-800 hover:text-[#D4AF37] transition-colors duration-300"
-          >
-            Dining
-          </Link>
-          <Link
-            to="/reservation"
-            className="text-stone-800 hover:text-[#D4AF37] transition-colors duration-300"
-          >
-            Reservations
-          </Link>
-          <Link
-            to="/contact"
-            className="text-stone-800 hover:text-[#D4AF37] transition-colors duration-300"
-          >
-            Contact
-          </Link>
-          {currentUser ? (
-            <span className="space-x-8">
-              <Link
-                to="/dashboard"
-                className="text-stone-800 hover:text-[#D4AF37] transition-colors duration-300 border-b border-transparent hover:border-[#D4AF37] pb-1"
-              >
-                My Booking
-              </Link>
-              <button
-                onClick={handleLogout}
-                className="text-stone-800 hover:text-[#D4AF37] transition-colors duration-300 uppercase tracking-[0.2em]"
-              >
-                Logout
-              </button>
-            </span>
-          ) : (
+        <div className="flex items-center space-x-6">
+          <div className="space-x-8 lg:space-x-12 text-xs uppercase tracking-[0.2em] font-medium hidden md:block">
             <Link
-              to="/auth"
+              to="/"
               className="text-stone-800 hover:text-[#D4AF37] transition-colors duration-300"
             >
-              Member Access
+              Experience
             </Link>
-          )}
-        </div>
-
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="md:hidden text-stone-800 focus:outline-none focus:text-[#D4AF37] z-50 p-2"
-          aria-label="Toggle Mobile Menu"
-        >
-          <svg
-            className="w-6 h-6 transition-transform duration-300"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            {isOpen ? (
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="1.5"
-                d="M6 18L18 6M6 6l12 12"
-              />
+            <Link
+              to="/menu"
+              className="text-stone-800 hover:text-[#D4AF37] transition-colors duration-300"
+            >
+              Dining
+            </Link>
+            <Link
+              to="/reservation"
+              className="text-stone-800 hover:text-[#D4AF37] transition-colors duration-300"
+            >
+              Reservations
+            </Link>
+            <Link
+              to="/contact"
+              className="text-stone-800 hover:text-[#D4AF37] transition-colors duration-300"
+            >
+              Contact
+            </Link>
+            {currentUser ? (
+              <span className="space-x-8">
+                <Link
+                  to="/dashboard"
+                  className="text-stone-800 hover:text-[#D4AF37] transition-colors duration-300 border-b border-transparent hover:border-[#D4AF37] pb-1"
+                >
+                  My Dashboard
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className="text-stone-800 hover:text-[#D4AF37] transition-colors duration-300 uppercase tracking-[0.2em]"
+                >
+                  Logout
+                </button>
+              </span>
             ) : (
+              <Link
+                to="/auth"
+                className="text-stone-800 hover:text-[#D4AF37] transition-colors duration-300"
+              >
+                Member Access
+              </Link>
+            )}
+          </div>
+
+          {/* Cart Icon */}
+          <button
+            onClick={() => setIsCartOpen(true)}
+            className="relative text-stone-800 hover:text-[#D4AF37] transition-colors z-50"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth="1.5"
-                d="M4 6h16M4 12h16M4 18h16"
+                d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
               />
+            </svg>
+            {cartCount > 0 && (
+              <span className="absolute -top-2 -right-2 bg-[#D4AF37] text-white text-[9px] font-bold h-4 w-4 rounded-full flex items-center justify-center">
+                {cartCount}
+              </span>
             )}
-          </svg>
-        </button>
+          </button>
+
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className="md:hidden text-stone-800 focus:outline-none focus:text-[#D4AF37] z-50 ml-4"
+            aria-label="Toggle Mobile Menu"
+          >
+            <svg
+              className="w-6 h-6 transition-transform duration-300"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              {isOpen ? (
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="1.5"
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              ) : (
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="1.5"
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
+              )}
+            </svg>
+          </button>
+        </div>
 
         <AnimatePresence>
           {isOpen && (
@@ -211,7 +772,7 @@ const Navbar = () => {
                   onClick={() => setIsOpen(false)}
                   className="hover:text-[#D4AF37] transition-colors duration-300"
                 >
-                  Dining
+                  Dining & Ordering
                 </Link>
                 <Link
                   to="/reservation"
@@ -234,7 +795,7 @@ const Navbar = () => {
                       onClick={() => setIsOpen(false)}
                       className="hover:text-[#D4AF37] transition-colors duration-300"
                     >
-                      My Booking
+                      My Dashboard
                     </Link>
                     <button
                       onClick={() => {
@@ -339,26 +900,22 @@ const Reservation = () => {
     return () => document.removeEventListener("click", closeAllMenus);
   }, []);
 
-  const getDaysInMonth = (month, year) => {
-    return new Date(year, month + 1, 0).getDate();
-  };
+  const getDaysInMonth = (month, year) =>
+    new Date(year, month + 1, 0).getDate();
 
   const getAvailableDays = () => {
     if (selectedMonth === "" || !selectedYear) return [];
-
     const numMonth = parseInt(selectedMonth);
     const numYear = parseInt(selectedYear);
     const totalDays = getDaysInMonth(numMonth, numYear);
     const dayArray = [];
-
     for (let d = 1; d <= totalDays; d++) {
       if (
         numYear === currentYear &&
         numMonth === currentMonth &&
         d < currentDate
-      ) {
+      )
         continue;
-      }
       dayArray.push(d);
     }
     return dayArray;
@@ -367,15 +924,13 @@ const Reservation = () => {
   const getAvailableMonths = () => {
     if (!selectedYear) return [];
     const numYear = parseInt(selectedYear);
-
-    if (numYear === currentYear) {
+    if (numYear === currentYear)
       return months.filter((m) => m.value >= currentMonth);
-    }
     return months;
   };
 
-  const hours = Array.from({ length: 12 }, (_, i) => String(i + 1));
-  const minutes = Array.from({ length: 60 }, (_, i) =>
+  const hoursList = Array.from({ length: 12 }, (_, i) => String(i + 1));
+  const minutesList = Array.from({ length: 60 }, (_, i) =>
     String(i).padStart(2, "0"),
   );
   const amPmOptions = ["AM", "PM"];
@@ -394,23 +949,17 @@ const Reservation = () => {
 
   const isTimeSlotDisabled = (hour, minute, amPm, date) => {
     if (!date || !hour || !minute || !amPm) return false;
-
     let numHour = parseInt(hour);
     const mins = parseInt(minute);
 
-    if (amPm === "AM" && numHour >= 1 && numHour <= 6) {
-      return true;
-    }
-
+    if (amPm === "AM" && numHour >= 1 && numHour <= 6) return true;
     if (amPm === "PM" && numHour !== 12) numHour += 12;
     if (amPm === "AM" && numHour === 12) numHour = 0;
 
     const targetDateTime = new Date(date);
     targetDateTime.setHours(numHour, mins, 0, 0);
-
     const now = new Date();
     const minAdvanceWindowMs = 12 * 60 * 60 * 1000;
-
     return targetDateTime.getTime() - now.getTime() < minAdvanceWindowMs;
   };
 
@@ -436,7 +985,6 @@ const Reservation = () => {
         numYear === currentYear &&
         numMonth === currentMonth &&
         numDay < currentDate;
-
       if (numDay > maxDays || isPastDay) {
         setSelectedDay("");
         setSelectedHour("");
@@ -449,13 +997,14 @@ const Reservation = () => {
     if (selectedHour && selectedMinute && selectedAmPm) {
       const constructedDate = getConstructedDate();
       if (constructedDate) {
-        const disabled = isTimeSlotDisabled(
-          selectedHour,
-          selectedMinute,
-          selectedAmPm,
-          constructedDate,
-        );
-        if (disabled) {
+        if (
+          isTimeSlotDisabled(
+            selectedHour,
+            selectedMinute,
+            selectedAmPm,
+            constructedDate,
+          )
+        ) {
           setSelectedHour("");
           setSelectedMinute("");
           setSelectedAmPm("");
@@ -473,7 +1022,6 @@ const Reservation = () => {
 
   const handleReservationSubmit = async (e) => {
     e.preventDefault();
-
     if (!currentUser) {
       toast.error("Please log in to secure your reservation.");
       navigate("/auth");
@@ -513,7 +1061,21 @@ const Reservation = () => {
       );
       const existingRes = await getDocs(userQuery);
 
-      if (!existingRes.empty) {
+      let hasActiveReservation = false;
+      for (const docSnap of existingRes.docs) {
+        const resData = docSnap.data();
+        const resDateTime = new Date(`${resData.date}T${resData.time}`);
+        const expirationTime = new Date(
+          resDateTime.getTime() + 2 * 60 * 60 * 1000,
+        );
+        if (expirationTime < new Date()) {
+          await deleteDoc(doc(db, "reservations", docSnap.id));
+        } else {
+          hasActiveReservation = true;
+        }
+      }
+
+      if (hasActiveReservation) {
         toast.error(
           "You already have an active reservation. Limit is one per member.",
         );
@@ -536,45 +1098,17 @@ const Reservation = () => {
         { id: "S04", cap: 1 },
         { id: "S05", cap: 1 },
         { id: "S06", cap: 1 },
-        { id: "S07", cap: 1 },
-        { id: "S08", cap: 1 },
-        { id: "S09", cap: 1 },
-        { id: "S11", cap: 1 },
-        { id: "S12", cap: 1 },
         { id: "S13", cap: 2 },
         { id: "S14", cap: 2 },
         { id: "S15", cap: 2 },
         { id: "S16", cap: 2 },
         { id: "S17", cap: 2 },
-        { id: "S18", cap: 2 },
-        { id: "S19", cap: 2 },
-        { id: "S21", cap: 2 },
-        { id: "S22", cap: 2 },
-        { id: "S23", cap: 2 },
-        { id: "S24", cap: 2 },
         { id: "S25", cap: 3 },
         { id: "S26", cap: 3 },
         { id: "S27", cap: 3 },
-        { id: "S28", cap: 3 },
-        { id: "S29", cap: 3 },
-        { id: "S31", cap: 3 },
-        { id: "S32", cap: 3 },
-        { id: "S33", cap: 3 },
-        { id: "S34", cap: 3 },
-        { id: "S35", cap: 3 },
-        { id: "S36", cap: 3 },
         { id: "S37", cap: 4 },
         { id: "S38", cap: 4 },
         { id: "S39", cap: 4 },
-        { id: "S41", cap: 4 },
-        { id: "S42", cap: 4 },
-        { id: "S43", cap: 4 },
-        { id: "S44", cap: 4 },
-        { id: "S45", cap: 4 },
-        { id: "S46", cap: 4 },
-        { id: "S47", cap: 4 },
-        { id: "S48", cap: 4 },
-        { id: "S49", cap: 4 },
         { id: "S10", cap: 5 },
         { id: "S20", cap: 5 },
         { id: "S30", cap: 5 },
@@ -597,9 +1131,7 @@ const Reservation = () => {
       }
 
       if (!assignedTable) {
-        toast.error(
-          "No tables available for that size/time. Try another slot.",
-        );
+        toast.error("No tables available for that party size at this time.");
         setIsBooking(false);
         return;
       }
@@ -690,11 +1222,7 @@ const Reservation = () => {
                     key={num}
                     type="button"
                     onClick={() => setGuests(num)}
-                    className={`py-3 text-xs uppercase tracking-wider transition-all duration-300 font-medium border ${
-                      guests === num
-                        ? "bg-stone-900 border-stone-900 text-white"
-                        : "border-stone-200 text-stone-800 hover:border-stone-900"
-                    }`}
+                    className={`py-3 text-xs uppercase tracking-wider transition-all duration-300 font-medium border ${guests === num ? "bg-stone-900 border-stone-900 text-white" : "border-stone-200 text-stone-800 hover:border-stone-900"}`}
                   >
                     {num === 10 ? "6-10" : num} {num === 1 ? "Guest" : "Guests"}
                   </button>
@@ -731,7 +1259,6 @@ const Reservation = () => {
                     </span>
                     <span className="text-[9px] text-[#D4AF37]">▼</span>
                   </button>
-
                   {dayDropdownOpen && (
                     <div className="absolute left-0 right-0 mt-1 max-h-[200px] overflow-y-auto bg-stone-900 text-white border border-stone-800 z-50 shadow-xl">
                       {getAvailableDays().map((d) => (
@@ -772,7 +1299,6 @@ const Reservation = () => {
                     </span>
                     <span className="text-[9px] text-[#D4AF37]">▼</span>
                   </button>
-
                   {monthDropdownOpen && (
                     <div className="absolute left-0 right-0 mt-1 max-h-[200px] overflow-y-auto bg-stone-900 text-white border border-stone-800 z-50 shadow-xl">
                       {getAvailableMonths().map((m) => (
@@ -808,7 +1334,6 @@ const Reservation = () => {
                     <span>{selectedYear || "YEAR"}</span>
                     <span className="text-[9px] text-[#D4AF37]">▼</span>
                   </button>
-
                   {yearDropdownOpen && (
                     <div className="absolute left-0 right-0 mt-1 max-h-[160px] overflow-y-auto bg-stone-900 text-white border border-stone-800 z-50 shadow-xl">
                       {years.map((y) => (
@@ -861,10 +1386,9 @@ const Reservation = () => {
                       </span>
                       <span className="text-[9px] text-[#D4AF37]">▼</span>
                     </button>
-
                     {hourDropdownOpen && (
                       <div className="absolute left-0 right-0 mt-1 max-h-[160px] overflow-y-auto bg-stone-900 text-white border border-stone-800 z-50 shadow-xl">
-                        {hours.map((h) => {
+                        {hoursList.map((h) => {
                           const disabled = isTimeSlotDisabled(
                             h,
                             selectedMinute || "00",
@@ -880,11 +1404,7 @@ const Reservation = () => {
                                 setSelectedHour(h);
                                 setHourDropdownOpen(false);
                               }}
-                              className={`w-full py-2.5 px-4 text-left text-xs tracking-wider transition-colors font-semibold border-b border-stone-800 ${
-                                disabled
-                                  ? "text-stone-600 cursor-not-allowed bg-stone-950/40"
-                                  : "hover:bg-[#D4AF37]"
-                              }`}
+                              className={`w-full py-2.5 px-4 text-left text-xs tracking-wider transition-colors font-semibold border-b border-stone-800 ${disabled ? "text-stone-600 cursor-not-allowed bg-stone-950/40" : "hover:bg-[#D4AF37]"}`}
                             >
                               {h}
                             </button>
@@ -917,10 +1437,9 @@ const Reservation = () => {
                       </span>
                       <span className="text-[9px] text-[#D4AF37]">▼</span>
                     </button>
-
                     {minuteDropdownOpen && (
                       <div className="absolute left-0 right-0 mt-1 max-h-[200px] overflow-y-auto bg-stone-900 text-white border border-stone-800 z-50 shadow-xl">
-                        {minutes.map((m) => {
+                        {minutesList.map((m) => {
                           const disabled = isTimeSlotDisabled(
                             selectedHour || "12",
                             m,
@@ -936,11 +1455,7 @@ const Reservation = () => {
                                 setSelectedMinute(m);
                                 setMinuteDropdownOpen(false);
                               }}
-                              className={`w-full py-2.5 px-4 text-left text-xs tracking-wider transition-colors font-semibold border-b border-stone-800 ${
-                                disabled
-                                  ? "text-stone-600 cursor-not-allowed bg-stone-950/40"
-                                  : "hover:bg-[#D4AF37]"
-                              }`}
+                              className={`w-full py-2.5 px-4 text-left text-xs tracking-wider transition-colors font-semibold border-b border-stone-800 ${disabled ? "text-stone-600 cursor-not-allowed bg-stone-950/40" : "hover:bg-[#D4AF37]"}`}
                             >
                               {m}
                             </button>
@@ -969,7 +1484,6 @@ const Reservation = () => {
                       <span>{selectedAmPm || "AM / PM"}</span>
                       <span className="text-[9px] text-[#D4AF37]">▼</span>
                     </button>
-
                     {amPmDropdownOpen && (
                       <div className="absolute left-0 right-0 mt-1 bg-stone-900 text-white border border-stone-800 z-50 shadow-xl">
                         {amPmOptions.map((p) => {
@@ -988,11 +1502,7 @@ const Reservation = () => {
                                 setSelectedAmPm(p);
                                 setAmPmDropdownOpen(false);
                               }}
-                              className={`w-full py-2.5 px-4 text-left text-xs tracking-wider transition-colors font-semibold border-b border-stone-800 ${
-                                disabled
-                                  ? "text-stone-600 cursor-not-allowed bg-stone-950/40"
-                                  : "hover:bg-[#D4AF37]"
-                              }`}
+                              className={`w-full py-2.5 px-4 text-left text-xs tracking-wider transition-colors font-semibold border-b border-stone-800 ${disabled ? "text-stone-600 cursor-not-allowed bg-stone-950/40" : "hover:bg-[#D4AF37]"}`}
                             >
                               {p}
                             </button>
@@ -1031,13 +1541,8 @@ const Dashboard = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   const [reservation, setReservation] = useState(null);
+  const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  const [isEditing, setIsEditing] = useState(false);
-  const [editDate, setEditDate] = useState("");
-  const [editTime, setEditTime] = useState("");
-  const [editGuests, setEditGuests] = useState("2");
-  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     if (!currentUser) {
@@ -1045,20 +1550,40 @@ const Dashboard = () => {
       return;
     }
 
-    const fetchReservation = async () => {
+    const fetchData = async () => {
       try {
-        const q = query(
+        // Fetch Reservation
+        const resQuery = query(
           collection(db, "reservations"),
           where("userId", "==", currentUser.uid),
         );
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-          const docData = querySnapshot.docs[0];
-          setReservation({ id: docData.id, ...docData.data() });
-          setEditDate(docData.data().date);
-          setEditTime(docData.data().time);
-          setEditGuests(docData.data().guests.toString());
+        const resSnapshot = await getDocs(resQuery);
+
+        let activeRes = null;
+        for (const docSnap of resSnapshot.docs) {
+          const docData = docSnap.data();
+          const resDateTime = new Date(`${docData.date}T${docData.time}`);
+          const expirationTime = new Date(
+            resDateTime.getTime() + 2 * 60 * 60 * 1000,
+          );
+          if (expirationTime < new Date()) {
+            await deleteDoc(doc(db, "reservations", docSnap.id));
+          } else {
+            activeRes = { id: docSnap.id, ...docData };
+          }
         }
+        setReservation(activeRes);
+
+        // Fetch Orders
+        const ordQuery = query(
+          collection(db, "orders"),
+          where("userId", "==", currentUser.uid),
+          orderBy("createdAt", "desc"),
+        );
+        const ordSnapshot = await getDocs(ordQuery);
+        setOrders(
+          ordSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+        );
       } catch (error) {
         console.error(error);
       } finally {
@@ -1066,191 +1591,8 @@ const Dashboard = () => {
       }
     };
 
-    fetchReservation();
+    fetchData();
   }, [currentUser, navigate]);
-
-  const canModify = () => {
-    if (!reservation) return false;
-    const resDate = new Date(`${reservation.date}T${reservation.time}`);
-    const now = new Date();
-    const diffInHours = (resDate - now) / (1000 * 60 * 60);
-    return diffInHours >= 24;
-  };
-
-  const handleCancel = async () => {
-    if (!canModify()) {
-      toast.error("Reservations cannot be modified within 24 hours.");
-      return;
-    }
-
-    if (
-      window.confirm(
-        "Are you sure you want to cancel this majestic dining experience?",
-      )
-    ) {
-      try {
-        await deleteDoc(doc(db, "reservations", reservation.id));
-
-        try {
-          await emailjs.send(
-            import.meta.env.VITE_EMAILJS_SERVICE_ID,
-            import.meta.env.VITE_EMAILJS_CANCEL_TEMPLATE_ID,
-            {
-              to_email: currentUser.email,
-              name: currentUser.displayName || "Guest",
-              date: reservation.date,
-              time: reservation.time,
-            },
-            import.meta.env.VITE_EMAILJS_PUBLIC_KEY,
-          );
-        } catch (emailError) {
-          console.error(emailError);
-        }
-
-        toast.success("Reservation cancelled successfully.");
-        setReservation(null);
-      } catch (error) {
-        toast.error("Failed to cancel. Please try again.");
-      }
-    }
-  };
-
-  const handleUpdate = async (e) => {
-    e.preventDefault();
-    if (!canModify()) {
-      toast.error("Reservations cannot be modified within 24 hours.");
-      return;
-    }
-
-    setIsProcessing(true);
-    try {
-      const requestedSeats = parseInt(editGuests);
-
-      const timeQuery = query(
-        collection(db, "reservations"),
-        where("date", "==", editDate),
-        where("time", "==", editTime),
-      );
-      const takenDocs = await getDocs(timeQuery);
-      const takenTableIds = takenDocs.docs
-        .filter((d) => d.id !== reservation.id)
-        .map((doc) => doc.data().tableId);
-
-      const allTables = [
-        { id: "S01", cap: 1 },
-        { id: "S02", cap: 1 },
-        { id: "S03", cap: 1 },
-        { id: "S04", cap: 1 },
-        { id: "S05", cap: 1 },
-        { id: "S06", cap: 1 },
-        { id: "S07", cap: 1 },
-        { id: "S08", cap: 1 },
-        { id: "S09", cap: 1 },
-        { id: "S11", cap: 1 },
-        { id: "S12", cap: 1 },
-        { id: "S13", cap: 2 },
-        { id: "S14", cap: 2 },
-        { id: "S15", cap: 2 },
-        { id: "S16", cap: 2 },
-        { id: "S17", cap: 2 },
-        { id: "S18", cap: 2 },
-        { id: "S19", cap: 2 },
-        { id: "S21", cap: 2 },
-        { id: "S22", cap: 2 },
-        { id: "S23", cap: 2 },
-        { id: "S24", cap: 2 },
-        { id: "S25", cap: 3 },
-        { id: "S26", cap: 3 },
-        { id: "S27", cap: 3 },
-        { id: "S28", cap: 3 },
-        { id: "S29", cap: 3 },
-        { id: "S31", cap: 3 },
-        { id: "S32", cap: 3 },
-        { id: "S33", cap: 3 },
-        { id: "S34", cap: 3 },
-        { id: "S35", cap: 3 },
-        { id: "S36", cap: 3 },
-        { id: "S37", cap: 4 },
-        { id: "S38", cap: 4 },
-        { id: "S39", cap: 4 },
-        { id: "S41", cap: 4 },
-        { id: "S42", cap: 4 },
-        { id: "S43", cap: 4 },
-        { id: "S44", cap: 4 },
-        { id: "S45", cap: 4 },
-        { id: "S46", cap: 4 },
-        { id: "S47", cap: 4 },
-        { id: "S48", cap: 4 },
-        { id: "S49", cap: 4 },
-        { id: "S10", cap: 5 },
-        { id: "S20", cap: 5 },
-        { id: "S30", cap: 5 },
-        { id: "S40", cap: 10, area: "Grand Enclosure" },
-        { id: "S50", cap: 10, area: "Grand Enclosure" },
-      ];
-
-      const availableTables = allTables.filter(
-        (t) => !takenTableIds.includes(t.id),
-      );
-      let assignedTable = null;
-
-      if (requestedSeats > 5) {
-        assignedTable = availableTables.find((t) => t.cap === 10);
-      } else {
-        const validTables = availableTables
-          .filter((t) => t.cap >= requestedSeats && t.cap <= 5)
-          .sort((a, b) => a.cap - b.cap);
-        if (validTables.length > 0) assignedTable = validTables[0];
-      }
-
-      if (!assignedTable) {
-        toast.error(
-          "No tables available for that size/time. Try another slot.",
-        );
-        setIsProcessing(false);
-        return;
-      }
-
-      const updatedData = {
-        date: editDate,
-        time: editTime,
-        guests: requestedSeats,
-        tableId: assignedTable.id,
-        area: assignedTable.area || "Main Dining Room",
-      };
-
-      await updateDoc(doc(db, "reservations", reservation.id), updatedData);
-
-      try {
-        await emailjs.send(
-          import.meta.env.VITE_EMAILJS_SERVICE_ID,
-          import.meta.env.VITE_EMAILJS_ACTIVE_TEMPLATE_ID,
-          {
-            to_email: currentUser.email,
-            name: currentUser.displayName || "Guest",
-            status: "Updated",
-            action: "updated",
-            date: editDate,
-            time: editTime,
-            guests: requestedSeats,
-            table_id: assignedTable.id,
-            area: assignedTable.area || "Main Dining Room",
-          },
-          import.meta.env.VITE_EMAILJS_PUBLIC_KEY,
-        );
-      } catch (emailError) {
-        console.error(emailError);
-      }
-
-      setReservation({ ...reservation, ...updatedData });
-      setIsEditing(false);
-      toast.success(`Booking updated. New table: ${assignedTable.id}`);
-    } catch (error) {
-      toast.error("Failed to update booking.");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
 
   if (loading)
     return (
@@ -1261,7 +1603,7 @@ const Dashboard = () => {
 
   return (
     <div className="animate-fade-in pt-40 pb-24 bg-[#FBFBF9] min-h-screen">
-      <div className="max-w-4xl mx-auto px-6">
+      <div className="max-w-5xl mx-auto px-6">
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl font-serif tracking-widest uppercase text-stone-900 mb-6">
             Member Dashboard
@@ -1271,34 +1613,29 @@ const Dashboard = () => {
           </p>
         </div>
 
-        {!reservation ? (
-          <div className="bg-white border border-stone-200 p-12 text-center shadow-sm">
-            <h3 className="text-2xl font-serif text-stone-900 mb-4">
-              No Active Reservations
-            </h3>
-            <p className="text-stone-500 mb-8 tracking-wide">
-              You currently do not have any upcoming dining experiences
-              scheduled with us.
-            </p>
-            <Link
-              to="/reservation"
-              className="bg-stone-900 text-white px-10 py-4 uppercase tracking-[0.2em] text-xs hover:bg-[#D4AF37] transition-colors font-medium"
-            >
-              Secure a Table
-            </Link>
-          </div>
-        ) : (
-          <div className="bg-white border border-stone-200 p-8 md:p-12 shadow-sm relative">
-            <div className="absolute top-0 right-0 bg-[#D4AF37] text-white text-[10px] font-bold uppercase tracking-widest px-4 py-2 m-6">
-              {reservation.status}
+        {/* Reservations Section */}
+        <div className="mb-16">
+          <h3 className="text-xs tracking-[0.3em] uppercase text-[#D4AF37] mb-6 font-semibold border-b border-stone-200 pb-2">
+            Active Reservation
+          </h3>
+          {!reservation ? (
+            <div className="bg-white border border-stone-200 p-8 text-center shadow-sm">
+              <p className="text-stone-500 mb-6 tracking-wide text-sm">
+                No upcoming dining experiences scheduled.
+              </p>
+              <Link
+                to="/reservation"
+                className="bg-stone-900 text-white px-8 py-3 uppercase tracking-[0.2em] text-xs hover:bg-[#D4AF37] transition-colors font-medium"
+              >
+                Secure a Table
+              </Link>
             </div>
-
-            <h3 className="text-2xl font-serif text-stone-900 mb-8 border-b border-stone-100 pb-4">
-              Your Itinerary
-            </h3>
-
-            {!isEditing ? (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
+          ) : (
+            <div className="bg-white border border-stone-200 p-8 shadow-sm relative">
+              <div className="absolute top-0 right-0 bg-[#D4AF37] text-white text-[10px] font-bold uppercase tracking-widest px-4 py-2 m-6">
+                {reservation.status}
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
                 <div>
                   <p className="text-[10px] tracking-[0.2em] uppercase text-stone-400 mb-2">
                     Date
@@ -1335,98 +1672,60 @@ const Dashboard = () => {
                   </p>
                 </div>
               </div>
-            ) : (
-              <form
-                onSubmit={handleUpdate}
-                className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12 bg-stone-50 p-6 border border-stone-100"
+            </div>
+          )}
+        </div>
+
+        {/* Orders Section */}
+        <div>
+          <h3 className="text-xs tracking-[0.3em] uppercase text-[#D4AF37] mb-6 font-semibold border-b border-stone-200 pb-2">
+            Delivery Orders
+          </h3>
+          {orders.length === 0 ? (
+            <div className="bg-white border border-stone-200 p-8 text-center shadow-sm">
+              <p className="text-stone-500 tracking-wide text-sm mb-6">
+                You have no recent delivery orders.
+              </p>
+              <Link
+                to="/menu"
+                className="bg-stone-900 text-white px-8 py-3 uppercase tracking-[0.2em] text-xs hover:bg-[#D4AF37] transition-colors font-medium"
               >
-                <div className="flex flex-col">
-                  <label className="text-xs tracking-[0.2em] uppercase text-stone-500 mb-2">
-                    Date
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={editDate}
-                    onChange={(e) => setEditDate(e.target.value)}
-                    className="bg-transparent border-b border-stone-300 py-2 focus:outline-none focus:border-[#D4AF37]"
-                  />
-                </div>
-                <div className="flex flex-col">
-                  <label className="text-xs tracking-[0.2em] uppercase text-stone-500 mb-2">
-                    Time
-                  </label>
-                  <input
-                    type="time"
-                    required
-                    value={editTime}
-                    onChange={(e) => setEditTime(e.target.value)}
-                    className="bg-transparent border-b border-stone-300 py-2 focus:outline-none focus:border-[#D4AF37]"
-                  />
-                </div>
-                <div className="flex flex-col">
-                  <label className="text-xs tracking-[0.2em] uppercase text-stone-500 mb-2">
-                    Guests
-                  </label>
-                  <select
-                    value={editGuests}
-                    onChange={(e) => setEditGuests(e.target.value)}
-                    className="bg-transparent border-b border-stone-300 py-2 focus:outline-none focus:border-[#D4AF37] appearance-none"
-                  >
-                    <option value="1">1 Person</option>
-                    <option value="2">2 People</option>
-                    <option value="3">3 People</option>
-                    <option value="4">4 People</option>
-                    <option value="5">5 People</option>
-                    <option value="10">6-10 People (Grand Enclosure)</option>
-                  </select>
-                </div>
-                <div className="col-span-1 md:col-span-3 flex justify-end space-x-4 mt-4">
-                  <button
-                    type="button"
-                    onClick={() => setIsEditing(false)}
-                    className="px-6 py-2 text-xs uppercase tracking-[0.2em] font-medium text-stone-500 hover:text-stone-900"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isProcessing}
-                    className="bg-[#D4AF37] text-white px-8 py-2 uppercase tracking-[0.2em] text-xs font-medium hover:bg-stone-900 transition-colors"
-                  >
-                    {isProcessing ? "Checking..." : "Confirm Changes"}
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {!canModify() && !isEditing && (
-              <div className="bg-orange-50 border border-orange-100 p-4 mb-8">
-                <p className="text-xs text-orange-800 uppercase tracking-widest text-center">
-                  Notice: Modifications are disabled within 24 hours of your
-                  booking time. Please contact the concierge directly.
-                </p>
-              </div>
-            )}
-
-            {!isEditing && canModify() && (
-              <div className="flex justify-end space-x-6 border-t border-stone-100 pt-6">
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="text-xs uppercase tracking-[0.2em] text-stone-500 hover:text-[#D4AF37] font-medium transition-colors"
+                Order Delivery
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {orders.map((order) => (
+                <div
+                  key={order.id}
+                  className="bg-white border border-stone-200 p-6 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center"
                 >
-                  Modify Booking
-                </button>
-                <button
-                  onClick={handleCancel}
-                  className="text-xs uppercase tracking-[0.2em] text-red-400 hover:text-red-600 font-medium transition-colors"
-                >
-                  Cancel Reservation
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+                  <div className="mb-4 md:mb-0">
+                    <p className="text-[10px] text-stone-400 uppercase tracking-widest mb-1">
+                      Order #{order.id.slice(-6).toUpperCase()}
+                    </p>
+                    <p className="font-serif text-lg text-stone-900 mb-1">
+                      {formatPrice(order.total)}{" "}
+                      <span className="text-xs font-sans text-stone-500 tracking-wide ml-2">
+                        via {order.paymentMethod}
+                      </span>
+                    </p>
+                    <p className="text-xs text-stone-500 font-medium">
+                      {order.items
+                        .map((i) => `${i.quantity}x ${i.name}`)
+                        .join(", ")}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className="inline-block bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/20 px-3 py-1 text-[10px] font-bold uppercase tracking-widest">
+                      {order.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1466,9 +1765,10 @@ const Home = () => {
   ];
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setCurrentSlide((prev) => (prev + 1) % pointers.length);
-    }, 6000);
+    const timer = setTimeout(
+      () => setCurrentSlide((prev) => (prev + 1) % pointers.length),
+      6000,
+    );
     return () => clearTimeout(timer);
   }, [currentSlide, pointers.length]);
 
@@ -1497,14 +1797,12 @@ const Home = () => {
             </span>
             <div className="w-12 h-px bg-[#D4AF37]"></div>
           </motion.div>
-
           <motion.h2
             variants={fadeUp}
             className="text-5xl md:text-8xl font-serif tracking-widest text-stone-900 mb-6 leading-tight mt-4"
           >
             UNSURPASSED <br /> GRANDEUR
           </motion.h2>
-
           <motion.p
             variants={fadeUp}
             className="text-sm md:text-base tracking-[0.15em] font-medium text-stone-500 max-w-2xl mx-auto leading-relaxed mb-16"
@@ -1512,7 +1810,6 @@ const Home = () => {
             Where majestic architecture meets legendary gastronomy. Step into an
             era of regal dining and impeccable hospitality.
           </motion.p>
-
           <motion.div
             variants={fadeUp}
             className="w-full h-[40vh] md:h-[55vh] relative shadow-xl overflow-hidden group"
@@ -1539,7 +1836,6 @@ const Home = () => {
               className="w-8 h-8 mx-auto mb-8 text-[#D4AF37]"
               fill="currentColor"
               viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
             >
               <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
             </svg>
@@ -1550,9 +1846,7 @@ const Home = () => {
             <p className="text-stone-600 font-medium leading-relaxed tracking-wider text-sm md:text-base max-w-2xl mx-auto mb-12">
               The Restro-Cafe stands as a testament to unparalleled luxury.
               Every ingredient is sourced with absolute precision, every dish
-              crafted with a reverence for culinary history. Here, dining
-              transcends the ordinary and becomes an event of majestic
-              proportions.
+              crafted with a reverence for culinary history.
             </p>
             <Link
               to="/menu"
@@ -1625,13 +1919,13 @@ const Home = () => {
               className="col-span-1 md:col-span-2 relative group overflow-hidden bg-stone-100"
             >
               <img
-                src="https://images.unsplash.com/photo-1560170847-d2d59c1e4b00?q=80&w=1335&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+                src="https://images.unsplash.com/photo-1578683010236-d716f9a3f461?q=80&w=2070&auto=format&fit=crop"
                 alt="Grand Chandelier"
                 className="w-full h-[500px] object-cover group-hover:scale-105 transition-transform duration-1000"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-stone-900/60 to-transparent flex items-end p-8">
                 <p className="font-serif text-2xl tracking-widest uppercase text-white drop-shadow-md">
-                  The Grand Enclosure
+                  The Grand Pavilion
                 </p>
               </div>
             </motion.div>
@@ -1690,6 +1984,8 @@ const Home = () => {
 };
 
 const Menu = () => {
+  const { addToCart } = useCart();
+
   const categories = [
     {
       title: "Signatures of the Royal Court",
@@ -1756,9 +2052,9 @@ const Menu = () => {
               {category.items.map((item, index) => (
                 <div
                   key={index}
-                  className="flex flex-col md:flex-row justify-between items-baseline group cursor-default"
+                  className="flex flex-col md:flex-row justify-between items-start md:items-center group cursor-default p-4 border border-transparent hover:border-stone-200 hover:bg-white transition-all"
                 >
-                  <div className="md:w-3/4 pr-4 z-10 bg-[#FBFBF9]">
+                  <div className="md:w-3/4 pr-4">
                     <h4 className="text-xl font-serif tracking-wider text-stone-900 mb-2">
                       {item.name}
                     </h4>
@@ -1766,10 +2062,16 @@ const Menu = () => {
                       {item.desc}
                     </p>
                   </div>
-                  <div className="mt-4 md:mt-0 flex-shrink-0 z-10 bg-[#FBFBF9] pl-4">
+                  <div className="mt-6 md:mt-0 flex-shrink-0 flex items-center justify-between w-full md:w-auto md:space-x-8">
                     <span className="text-lg font-serif text-[#D4AF37] tracking-widest">
                       {item.price}
                     </span>
+                    <button
+                      onClick={() => addToCart(item)}
+                      className="border border-stone-300 px-6 py-2 text-xs uppercase tracking-widest font-semibold text-stone-800 hover:bg-[#D4AF37] hover:text-white hover:border-[#D4AF37] transition-colors"
+                    >
+                      + Order
+                    </button>
                   </div>
                 </div>
               ))}
@@ -1790,12 +2092,10 @@ const Contact = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     if (!name || !email || !message) {
       toast.error("Please fill out all required fields.");
       return;
     }
-
     setIsSubmitting(true);
     try {
       await addDoc(collection(db, "inquiries"), {
@@ -1806,15 +2106,12 @@ const Contact = () => {
         status: "New",
         createdAt: serverTimestamp(),
       });
-
       toast.success("Inquiry sent. Our concierge will reach out shortly.");
-
       setName("");
       setEmail("");
       setType("General Reservation");
       setMessage("");
     } catch (error) {
-      console.error(error);
       toast.error("Failed to send inquiry. Please try again.");
     } finally {
       setIsSubmitting(false);
@@ -1943,7 +2240,7 @@ const Concierge = () => {
         "Perfection is not an act; it is a relentless, unforgiving habit. Every plate that leaves this kitchen carries a piece of my soul and centuries of culinary discipline.",
       signature: "The Imperial Tasting Menu",
       image:
-        "https://images.unsplash.com/photo-1727975741756-9c8591e5aac6?q=80&w=1977&auto=format&fit=crop",
+        "https://images.unsplash.com/photo-1583394838336-acd977736f90?q=80&w=1968&auto=format&fit=crop",
     },
     {
       id: 2,
@@ -1953,7 +2250,7 @@ const Concierge = () => {
         "Sugar is merely the medium. My true ingredients are memory, structure, and fleeting moments of pure, unadulterated joy. A dessert should be as transient as a dream.",
       signature: "Saffron Pistachio Kulfi",
       image:
-        "https://images.unsplash.com/photo-1731576089270-9e806089a40f?q=80&w=1977&auto=format&fit=crop",
+        "https://images.unsplash.com/photo-1600880292203-757bb62b4baf?q=80&w=2070&auto=format&fit=crop",
     },
     {
       id: 3,
@@ -1973,7 +2270,7 @@ const Concierge = () => {
         "A bottle of wine is a time capsule. My duty is to unlock the exact year, terroir, and weather that perfectly harmonizes with the flame-kissed ingredients on your plate.",
       signature: "Bordeaux Heritage Pairing",
       image:
-        "https://images.unsplash.com/photo-1669707569583-8d4c8051130a?q=80&w=1977&auto=format&fit=crop",
+        "https://images.unsplash.com/photo-1559564034-2e9121703666?q=80&w=2070&auto=format&fit=crop",
     },
     {
       id: 5,
@@ -1983,7 +2280,7 @@ const Concierge = () => {
         "The knife must move with intention, never hesitation. Respect the ocean, respect the ingredient, and the dish will ultimately speak for itself.",
       signature: "Omakase Reserve",
       image:
-        "https://images.unsplash.com/photo-1583394293214-28ded15ee548?q=80&w=1977&auto=format&fit=crop",
+        "https://images.unsplash.com/photo-1581299894007-aaa502973166?q=80&w=1974&auto=format&fit=crop",
     },
   ];
 
@@ -2004,9 +2301,7 @@ const Concierge = () => {
           {curators.map((curator, index) => (
             <div
               key={curator.id}
-              className={`flex flex-col lg:flex-row items-center gap-0 lg:gap-16 mb-24 lg:mb-32 ${
-                index % 2 !== 0 ? "lg:flex-row-reverse" : ""
-              }`}
+              className={`flex flex-col lg:flex-row items-center gap-0 lg:gap-16 mb-24 lg:mb-32 ${index % 2 !== 0 ? "lg:flex-row-reverse" : ""}`}
             >
               <div className="w-full lg:w-1/2 relative h-[400px] lg:h-[600px] overflow-hidden group bg-stone-900">
                 <img
@@ -2016,7 +2311,6 @@ const Concierge = () => {
                 />
                 <div className="absolute inset-0 border border-white/20 m-6 pointer-events-none transition-all duration-[1500ms] group-hover:m-4"></div>
               </div>
-
               <div className="w-full lg:w-1/2 flex flex-col justify-center p-8 lg:p-0">
                 <div className="w-12 h-px bg-[#D4AF37] mb-8"></div>
                 <h4 className="text-[10px] tracking-[0.3em] uppercase text-[#D4AF37] mb-4 font-bold">
@@ -2026,7 +2320,7 @@ const Concierge = () => {
                   {curator.name}
                 </h3>
                 <p className="text-stone-500 font-medium leading-relaxed tracking-[0.1em] text-sm md:text-base italic mb-10 border-l border-stone-200 pl-6">
-                  &quot;{curator.quote}&quot;
+                  "{curator.quote}"
                 </p>
                 <div className="text-[9px] tracking-[0.2em] uppercase text-stone-900 font-bold bg-stone-100 self-start px-4 py-2 border border-stone-200">
                   Signature:{" "}
