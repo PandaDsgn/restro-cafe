@@ -198,40 +198,20 @@ const CartDrawer = () => {
       }
 
       const options = {
-        key: "rzp_test_Sm9UGah8Kj6jzK",
+        key: "rzp_test_YOUR_KEY_HERE",
         amount: orderData.amount,
         currency: orderData.currency,
         name: "The Restro-Cafe",
         description: "Luxury Dining Delivery",
         order_id: orderData.id,
         handler: async function (response) {
-          try {
-            await addDoc(collection(db, "orders"), {
-              userId: currentUser.uid,
-              email: currentUser.email,
-              items: cart,
-              total: cartTotal,
-              address: address,
-              paymentId: response.razorpay_payment_id,
-              orderId: response.razorpay_order_id,
-              status: "Preparing",
-              createdAt: serverTimestamp(),
-            });
-
-            toast.success("Payment Successful! Order sent to kitchen.");
-            clearCart();
-            setIsCheckout(false);
-            setIsCartOpen(false);
-            navigate("/dashboard");
-          } catch (dbError) {
-            toast.error(
-              "Payment processed, but database failed. Contact support.",
-            );
-          }
+          // ... your existing success logic ...
         },
         prefill: {
           name: currentUser.displayName || "Guest",
           email: currentUser.email,
+          contact: "9999999999", // <-- ADD THIS: Razorpay requires a contact for UPI!
+          vpa: paymentMethod === "UPI" ? upiId : undefined, // <-- ADD THIS: Auto-fills their UPI ID!
         },
         theme: {
           color: "#D4AF37",
