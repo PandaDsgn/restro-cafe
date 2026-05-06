@@ -589,11 +589,6 @@ const Reservation = () => {
                   </button>
                 ))}
               </div>
-              {guests === 10 && (
-                <p className="text-[10px] text-[#D4AF37] mt-2 tracking-widest uppercase">
-                  Assigned to the luxury Grand Enclosure
-                </p>
-              )}
             </div>
 
             <div className="flex flex-col">
