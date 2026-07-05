@@ -1,9 +1,20 @@
 {
   "name": "restro-cafe",
-  "homepage": "https://PandaDsgn.github.io/restro-cafe/",
-  "private": true,
   "version": "0.0.0",
+  "private": true,
+  "description": "This repository contains the codebase for \"The Restro-Cafe,\" a high-end, full-stack web application designed as a sophisticated portfolio demonstration. It models a complete digital experience for modern restaurants, featuring a responsive React-based frontend and a Firebase backend. The platform handles everything from dynamic membership management to secure table reservations, payment processing, and geolocation.",
+  "homepage": "https://PandaDsgn.github.io/restro-cafe/",
+  "bugs": {
+    "url": "https://github.com/PandaDsgn/restro-cafe/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PandaDsgn/restro-cafe.git"
+  },
+  "license": "ISC",
+  "author": "",
   "type": "module",
+  "main": "eslint.config.js",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
